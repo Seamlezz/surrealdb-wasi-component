@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use serde_cbor::Value as CborValue;
 use serde_json::{Map as JsonMap, Number as JsonNumber, Value as JsonValue};
 use surrealdb::Value as SurrealValue;
@@ -24,7 +24,7 @@ pub fn cbor_to_json(value: CborValue) -> Result<JsonValue> {
             }
         }
         CborValue::Float(v) => {
-            let Some(number) = JsonNumber::from_f64(v as f64) else {
+            let Some(number) = JsonNumber::from_f64(v) else {
                 bail!("invalid float value")
             };
             JsonValue::Number(number)
