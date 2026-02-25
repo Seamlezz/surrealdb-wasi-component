@@ -28,7 +28,7 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Publish package
-        run: task release:publish TAG=$VERSION
+        run: task release:publish VERSION=$VERSION
 
   publish-crates:
     runs-on: ubuntu-latest

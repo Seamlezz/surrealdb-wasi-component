@@ -64,15 +64,15 @@ tasks:
 
   release:publish:
     vars:
-      OCI_REF: "ghcr.io/seamlezz/surrealdb:{{.TAG}}"
+      OCI_REF: "ghcr.io/seamlezz/surrealdb:{{.VERSION}}"
       OCI_FILE: "dist/seamlezz-surrealdb.wasm"
     preconditions:
-      - sh: test -n "{{.TAG}}"
-        msg: TAG is required. Use task release:publish TAG=<semver>
-      - sh: test "{{.TAG}}" = "${TAG#v}"
-        msg: TAG must not include the v prefix
-      - sh: echo "{{.TAG}}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'
-        msg: TAG must be a semver string
+      - sh: test -n "{{.VERSION}}"
+        msg: VERSION is required. Use task release:publish VERSION=<semver>
+      - sh: test "{{.VERSION}}" = "${VERSION#v}"
+        msg: VERSION must be plain semver. Git tag remains v<version>
+      - sh: echo "{{.VERSION}}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'
+        msg: VERSION must be a semver string
     cmds:
       - mkdir -p dist
       - wkg wit build --wit-dir wit --output {{.OCI_FILE}}
