@@ -21,6 +21,6 @@ jobs:
       - name: Install task
         uses: arduino/setup-task@v2
       - name: Install wkg
-        run: cargo install wasm-pkg-tools --locked
+        run: cargo install wkg --locked
       - name: Run CI task
         run: task ci

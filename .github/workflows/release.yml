@@ -17,7 +17,7 @@ jobs:
       - name: Install task
         uses: arduino/setup-task@v2
       - name: Install wkg
-        run: cargo install wasm-pkg-tools --locked
+        run: cargo install wkg --locked
       - name: Validate and normalize tag
         shell: bash
         run: |
