@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use serde_cbor::Value as CborValue;
 use serde_json::{Map as JsonMap, Number as JsonNumber, Value as JsonValue};
 use surrealdb::Value as SurrealValue;
