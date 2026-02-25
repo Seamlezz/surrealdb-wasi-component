@@ -1,0 +1,79 @@
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task --list
+
+  wit:fetch:
+    cmds:
+      - wkg wit fetch --wit-dir wit
+
+  fmt:
+    cmds:
+      - cargo fmt --all
+
+  fmt:check:
+    cmds:
+      - cargo fmt --all --check
+
+  lint:
+    cmds:
+      - cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
+    cmds:
+      - cargo test --workspace
+
+  build:host:
+    cmds:
+      - cargo build -p surrealdb-host-adapter
+
+  build:sdk:
+    cmds:
+      - cargo build -p surrealdb-component-sdk --target wasm32-wasip2
+
+  build:demo:
+    cmds:
+      - cargo build -p guest-demo --target wasm32-wasip2
+
+  check:
+    cmds:
+      - cargo check --workspace
+
+  ci:
+    deps:
+      - wit:fetch
+      - fmt:check
+      - lint
+      - test
+      - build:host
+      - build:sdk
+      - build:demo
+
+  release:dry-run:
+    vars:
+      TAG: "{{default \"0.1.0\" .TAG}}"
+      OCI_REF: "ghcr.io/seamlezz/surrealdb:{{.TAG}}"
+      OCI_FILE: "dist/seamlezz-surrealdb.wasm"
+    cmds:
+      - mkdir -p dist
+      - wkg wit build --wit-dir wit --output {{.OCI_FILE}}
+      - test -f {{.OCI_FILE}}
+      - printf "Prepared artifact %s for %s\n" "{{.OCI_FILE}}" "{{.OCI_REF}}"
+
+  release:publish:
+    vars:
+      OCI_REF: "ghcr.io/seamlezz/surrealdb:{{.TAG}}"
+      OCI_FILE: "dist/seamlezz-surrealdb.wasm"
+    preconditions:
+      - sh: test -n "{{.TAG}}"
+        msg: TAG is required. Use task release:publish TAG=<semver>
+      - sh: test "{{.TAG}}" = "${TAG#v}"
+        msg: TAG must not include the v prefix
+      - sh: echo "{{.TAG}}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'
+        msg: TAG must be a semver string
+    cmds:
+      - mkdir -p dist
+      - wkg wit build --wit-dir wit --output {{.OCI_FILE}}
+      - wkg oci push {{.OCI_REF}} {{.OCI_FILE}}
