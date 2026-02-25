@@ -29,3 +29,30 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Publish package
         run: task release:publish TAG=$VERSION
+
+  publish-crates:
+    runs-on: ubuntu-latest
+    needs: publish-wit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Validate crates publish token
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "Missing CARGO_REGISTRY_TOKEN repository secret"
+            exit 1
+          fi
+      - name: Dry run publish surrealdb-component-sdk
+        run: cargo publish --dry-run -p surrealdb-component-sdk
+      - name: Dry run publish surrealdb-host-adapter
+        run: cargo publish --dry-run -p surrealdb-host-adapter
+      - name: Publish surrealdb-component-sdk
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p surrealdb-component-sdk
+      - name: Publish surrealdb-host-adapter
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p surrealdb-host-adapter
