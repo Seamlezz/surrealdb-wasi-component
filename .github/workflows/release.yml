@@ -1,9 +1,23 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "WIT version for publish tasks"
+        required: true
+      publish_wit:
+        description: "Publish WIT package"
+        type: boolean
+        default: true
+      publish_sdk:
+        description: "Publish surrealdb-component-sdk"
+        type: boolean
+        default: true
+      publish_host_adapter:
+        description: "Publish surrealdb-host-adapter"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -12,18 +26,19 @@ permissions:
 jobs:
   publish-wit:
     runs-on: ubuntu-latest
+    if: inputs.publish_wit
     steps:
       - uses: actions/checkout@v4
       - name: Install task
         uses: arduino/setup-task@v2
       - name: Install wkg
         run: cargo install wkg --locked
-      - name: Validate and normalize tag
+      - name: Validate version
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ inputs.version }}"
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid release tag: $GITHUB_REF_NAME"
+            echo "Invalid version: $VERSION"
             exit 1
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
@@ -38,6 +53,7 @@ jobs:
   publish-crates:
     runs-on: ubuntu-latest
     needs: publish-wit
+    if: always() && (inputs.publish_sdk || inputs.publish_host_adapter)
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -50,14 +66,18 @@ jobs:
             exit 1
           fi
       - name: Dry run publish surrealdb-component-sdk
+        if: inputs.publish_sdk
         run: cargo publish --dry-run -p surrealdb-component-sdk
       - name: Dry run publish surrealdb-host-adapter
+        if: inputs.publish_host_adapter
         run: cargo publish --dry-run -p surrealdb-host-adapter
       - name: Publish surrealdb-component-sdk
+        if: inputs.publish_sdk
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish -p surrealdb-component-sdk
       - name: Publish surrealdb-host-adapter
+        if: inputs.publish_host_adapter
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish -p surrealdb-host-adapter
