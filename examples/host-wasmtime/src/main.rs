@@ -1,11 +1,49 @@
 use anyhow::{Context, Result};
 use std::env;
+use std::sync::Arc;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
 use surrealdb::opt::auth::Root;
-use surrealdb_host_adapter::SurrealHostAdapter;
+use tokio::sync::RwLock;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Config, Engine, Store};
+
+mod bindings {
+    wasmtime::component::bindgen!({
+        path: "wit",
+        world: "adapter",
+        imports: { default: async | trappable },
+        exports: {
+            default: async,
+        },
+    });
+}
+
+#[derive(Clone)]
+pub struct SurrealHostAdapter {
+    db: Arc<RwLock<Surreal<Any>>>,
+}
+
+impl SurrealHostAdapter {
+    pub fn new(db: Surreal<Any>) -> Self {
+        Self {
+            db: Arc::new(RwLock::new(db)),
+        }
+    }
+}
+
+impl bindings::seamlezz::surrealdb::call::Host for SurrealHostAdapter {
+    async fn query(
+        &mut self,
+        query: String,
+        params: Vec<(String, Vec<u8>)>,
+    ) -> wasmtime::Result<Vec<Result<Vec<u8>, String>>> {
+        let db = self.db.read().await;
+        surrealdb_host_adapter::query(&db, query, params)
+            .await
+            .map_err(wasmtime::Error::new)
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -45,14 +83,12 @@ async fn main() -> Result<()> {
 
     let mut linker = Linker::new(&engine);
 
-    surrealdb_host_adapter::bindings::Adapter::add_to_linker::<_, wasmtime::component::HasSelf<_>>(
-        &mut linker,
-        |state| state,
-    )?;
+    bindings::Adapter::add_to_linker::<_, wasmtime::component::HasSelf<_>>(&mut linker, |state| {
+        state
+    })?;
 
     let mut store = Store::new(&engine, adapter);
-    surrealdb_host_adapter::bindings::Adapter::instantiate_async(&mut store, &component, &linker)
-        .await?;
+    bindings::Adapter::instantiate_async(&mut store, &component, &linker).await?;
 
     println!(
         "Successfully loaded and instantiated component: {}",
