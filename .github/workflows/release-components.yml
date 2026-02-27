@@ -119,9 +119,8 @@ jobs:
               ;;
           esac
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-      - name: Create GitHub release attempt 1
+      - name: Create GitHub release
         id: release_1
-        continue-on-error: true
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.meta.outputs.tag }}
@@ -130,32 +129,3 @@ jobs:
           allowUpdates: true
           removeArtifacts: false
           commit: ${{ github.sha }}
-      - name: Create GitHub release attempt 2
-        id: release_2
-        if: steps.release_1.outcome == 'failure'
-        continue-on-error: true
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.tag }}
-          bodyFile: RELEASE_NOTES.md
-          allowUpdates: true
-          removeArtifacts: false
-          commit: ${{ github.sha }}
-      - name: Create GitHub release attempt 3
-        id: release_3
-        if: steps.release_2.outcome == 'failure'
-        continue-on-error: true
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.tag }}
-          bodyFile: RELEASE_NOTES.md
-          allowUpdates: true
-          removeArtifacts: false
-          commit: ${{ github.sha }}
-      - name: Fail if release was not created
-        if: steps.release_1.outcome == 'failure' && steps.release_2.outcome == 'failure' && steps.release_3.outcome == 'failure'
-        run: |
-          echo "Failed to create release after 3 attempts for ${{ steps.meta.outputs.tag }}"
-          exit 1
