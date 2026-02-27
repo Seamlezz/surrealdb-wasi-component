@@ -3,7 +3,3 @@ package seamlezz:surrealdb@0.1.0;
 interface call {
   query: async func(query: string, params: list<tuple<string, list<u8>>>) -> list<result<list<u8>, string>>;
 }
-
-world provider {
-  export call;
-}
