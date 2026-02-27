@@ -25,10 +25,6 @@ permissions:
   contents: write
   packages: write
 
-concurrency:
-  group: release-components
-  cancel-in-progress: false
-
 jobs:
   detect:
     runs-on: ubuntu-latest
@@ -55,6 +51,9 @@ jobs:
       fail-fast: false
       matrix:
         component: ${{ fromJson(needs.detect.outputs.matrix) }}
+    concurrency:
+      group: release-component-${{ matrix.component.id }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -107,9 +106,8 @@ jobs:
           bash .github/scripts/component-release-notes.sh \
             "${{ matrix.component.id }}" \
             "${{ matrix.component.version }}" > RELEASE_NOTES.md
-      - name: Create GitHub release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve release metadata
+        id: meta
         run: |
           case "${{ matrix.component.id }}" in
             sdk) TAG="sdk-v${{ matrix.component.version }}" ;;
@@ -120,7 +118,44 @@ jobs:
               exit 1
               ;;
           esac
-          gh release create "$TAG" \
-            --target "${{ github.sha }}" \
-            --title "$TAG" \
-            --notes-file RELEASE_NOTES.md
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Create GitHub release attempt 1
+        id: release_1
+        continue-on-error: true
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          bodyFile: RELEASE_NOTES.md
+          allowUpdates: true
+          removeArtifacts: false
+          commit: ${{ github.sha }}
+      - name: Create GitHub release attempt 2
+        id: release_2
+        if: steps.release_1.outcome == 'failure'
+        continue-on-error: true
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          bodyFile: RELEASE_NOTES.md
+          allowUpdates: true
+          removeArtifacts: false
+          commit: ${{ github.sha }}
+      - name: Create GitHub release attempt 3
+        id: release_3
+        if: steps.release_2.outcome == 'failure'
+        continue-on-error: true
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          bodyFile: RELEASE_NOTES.md
+          allowUpdates: true
+          removeArtifacts: false
+          commit: ${{ github.sha }}
+      - name: Fail if release was not created
+        if: steps.release_1.outcome == 'failure' && steps.release_2.outcome == 'failure' && steps.release_3.outcome == 'failure'
+        run: |
+          echo "Failed to create release after 3 attempts for ${{ steps.meta.outputs.tag }}"
+          exit 1
