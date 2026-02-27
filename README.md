@@ -16,7 +16,7 @@ This workspace provides the pieces needed to let a WASI component run SurrealDB 
 1. `crates/surrealdb-component-sdk`: SDK for guest components that target `wasm32-wasip2`.
 2. `crates/surrealdb-host-adapter`: host adapter for Wasmtime component linking.
 3. `examples/guest-demo`: minimal guest example that calls `query().bind().execute()`.
-4. `docs/wasmtime-example.md`: host integration snippet with linker setup.
+4. `examples/host-wasmtime`: runnable host example for Wasmtime integration.
 5. `wit/README.md`: package information for the WIT contract.
 
 ## Architecture
@@ -61,10 +61,12 @@ See `crates/surrealdb-component-sdk/README.md`.
 ### Wire a host runtime
 
 1. Create and authenticate a `Surreal<Any>` database client.
-2. Construct `SurrealHostAdapter::new(db)`.
-3. Register bindings with `call::add_to_linker`.
+2. Define host state and implement your generated `seamlezz::surrealdb::call::Host` trait.
+3. Forward `call::Host::query` to `surrealdb_host_adapter::query`.
+4. Register generated bindings with `Adapter::add_to_linker`.
+5. Instantiate with `Adapter::instantiate_async`.
 
-See `crates/surrealdb-host-adapter/README.md` and `docs/wasmtime-example.md`.
+See `crates/surrealdb-host-adapter/README.md` and `examples/host-wasmtime/src/main.rs`.
 
 ## Releases
 

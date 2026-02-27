@@ -1,100 +1,105 @@
 # surrealdb-host-adapter
 
-Rust host adapter that implements the `seamlezz:surrealdb` WIT host side and forwards guest component queries to SurrealDB.
-
-## What this crate does
-
-1. Exposes `SurrealHostAdapter` for runtime state.
-2. Implements generated WIT host bindings for `call.query`.
-3. Decodes guest CBOR parameters into JSON values for SurrealDB.
-4. Executes statement sets against SurrealDB.
-5. Encodes each statement result back to CBOR for guest consumption.
+Rust host helper for the `seamlezz:surrealdb` WIT contract. This crate exposes query execution and conversion logic. Your host runtime provides state, generated bindings, and linker wiring.
 
 ## Core API
 
 ```rust
-use surrealdb::Surreal;
-use surrealdb::engine::any::Any;
-use surrealdb_host_adapter::SurrealHostAdapter;
-
-let db: Surreal<Any> = Surreal::init();
-let adapter = SurrealHostAdapter::new(db);
+pub async fn query(
+    db: &Surreal<Any>,
+    query: String,
+    params: Vec<(String, Vec<u8>)>,
+) -> Result<Vec<Result<Vec<u8>, String>>, QueryError>
 ```
 
-`SurrealHostAdapter` is the host state type used by the generated bindings. Query execution is provided through the generated `Host` trait implementation, not through a public inherent `query` method.
+`query` decodes guest CBOR parameters, executes the SurrealDB statement set, and encodes each statement result back to CBOR.
 
-## Runtime Wiring Example
+## QueryError behavior
+
+1. `QueryError::ParamDecode { key, source }` is returned when one bound parameter cannot be decoded from CBOR.
+2. `QueryError::QueryExecution(source)` is returned when SurrealDB fails to execute the statement set.
+3. Statement extraction and serialization issues remain per statement `Err(String)` entries in the returned vector.
+
+## Wasmtime wiring pattern
+
+The host application owns the adapter type and WIT bindings. The `query` function is called from your generated `call::Host` implementation.
 
 ```rust
-use anyhow::Result;
-use std::env;
+use std::sync::Arc;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
-use surrealdb::opt::auth::Root;
-use surrealdb_host_adapter::SurrealHostAdapter;
-use wasmtime::component::{Component, Linker};
-use wasmtime::{Config, Engine, Store};
+use tokio::sync::RwLock;
 
-async fn run() -> Result<()> {
-    let component_path = env::args().nth(1).expect("component path");
+mod bindings {
+    wasmtime::component::bindgen!({
+        path: "wit",
+        world: "adapter",
+        imports: { default: async | trappable },
+        exports: { default: async },
+    });
+}
 
-    let db: Surreal<Any> = Surreal::init();
-    db.connect("http://127.0.0.1:8000").await?;
-    db.signin(Root { username: "root".to_string(), password: "root".to_string() }).await?;
-    db.use_ns("app").use_db("app").await?;
+#[derive(Clone)]
+pub struct HostState {
+    db: Arc<RwLock<Surreal<Any>>>,
+}
 
-    let adapter = SurrealHostAdapter::new(db);
-
-    let mut config = Config::new();
-    config.wasm_component_model(true);
-
-    let engine = Engine::new(&config)?;
-    let component = Component::from_file(&engine, component_path)?;
-
-    let mut linker = Linker::new(&engine);
-    surrealdb_host_adapter::bindings::Adapter::add_to_linker::<_, wasmtime::component::HasSelf<_>>(
-        &mut linker,
-        |state| state,
-    )?;
-
-    let mut store = Store::new(&engine, adapter);
-    surrealdb_host_adapter::bindings::Adapter::instantiate_async(&mut store, &component, &linker)
-        .await?;
-
-    Ok(())
+impl bindings::seamlezz::surrealdb::call::Host for HostState {
+    async fn query(
+        &mut self,
+        query: String,
+        params: Vec<(String, Vec<u8>)>,
+    ) -> wasmtime::Result<Vec<Result<Vec<u8>, String>>> {
+        let db = self.db.read().await;
+        surrealdb_host_adapter::query(&db, query, params)
+            .await
+            .map_err(wasmtime::Error::new)
+    }
 }
 ```
 
-## Wiring sequence
+## Runtime sequence
 
-1. **Create and configure SurrealDB client**: Connect, authenticate, select namespace/database.
-2. **Wrap client in adapter**: `SurrealHostAdapter::new(db)`.
-3. **Configure Engine**: Enable component model.
-4. **Build Linker**: Create `Linker::new(&engine)`.
-5. **Register bindings**: Call `bindings::Adapter::add_to_linker(&mut linker, |state| state)?`.
-6. **Create Store with adapter**: `Store::new(&engine, adapter)` passes the adapter as store state.
-7. **Instantiate component**: Call `bindings::Adapter::instantiate_async(&mut store, &component, &linker).await?`.
+1. Create and authenticate a `Surreal<Any>` client.
+2. Create host state that stores the client.
+3. Generate and register bindings with `bindings::Adapter::add_to_linker`.
+4. Create `Store` with host state.
+5. Instantiate the component with `bindings::Adapter::instantiate_async`.
 
-## Data Conversion Model
+## Run the example host
 
-1. Guest parameters arrive as CBOR bytes.
-2. Adapter converts CBOR values to JSON values.
-3. Adapter binds ordered parameters into SurrealDB query execution.
-4. Adapter takes each SurrealDB statement result and serializes it to CBOR bytes.
-5. Statement errors are returned as `String` values without CBOR payload.
+Start SurrealDB:
 
-## Error behavior
+```bash
+docker run --rm -p 8000:8000 surrealdb/surrealdb:latest start --user root --pass root
+```
 
-1. Parameter decode failures return contextual errors with the offending key.
-2. SurrealDB execution failures bubble up as adapter errors.
-3. Per statement extraction errors are captured per index and returned in the statement result list.
+Build a guest component:
 
-## Runnable example
+```bash
+cargo build -p guest-demo --target wasm32-wasip2
+wasm-tools component new target/wasm32-wasip2/debug/guest_demo.wasm -o guest-demo.component.wasm
+```
 
-See `examples/host-wasmtime` for a complete CLI example that accepts component path and environment variables for DB connection.
+Run with defaults:
+
+```bash
+cargo run -p host-wasmtime -- guest-demo.component.wasm
+```
+
+Run with custom connection settings:
+
+```bash
+SURREAL_DB_URL=http://127.0.0.1:8000 \
+SURREAL_DB_USER=root \
+SURREAL_DB_PASS=root \
+SURREAL_DB_NS=app \
+SURREAL_DB_NAME=app \
+cargo run -p host-wasmtime -- guest-demo.component.wasm
+```
 
 ## Related docs
 
 1. Workspace overview: `README.md`
 2. Guest SDK: `crates/surrealdb-component-sdk/README.md`
-3. Host integration note: `docs/wasmtime-example.md`
+3. Full runnable host reference: `examples/host-wasmtime/src/main.rs`
