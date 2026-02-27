@@ -68,14 +68,24 @@ See `crates/surrealdb-host-adapter/README.md` and `docs/wasmtime-example.md`.
 
 ## Releases
 
-WIT package release tasks are defined in `Taskfile.yml`.
+Components are released independently when their own version changes on `main`.
+
+1. `crates/surrealdb-component-sdk/Cargo.toml` version bump releases the SDK crate.
+2. `crates/surrealdb-host-adapter/Cargo.toml` version bump releases the host adapter crate.
+3. `wit/world.wit` package version bump releases the WIT OCI artifact.
+
+The automation is defined in `.github/workflows/release-components.yml`.
+
+You can also run that workflow manually and select one component to force a release check without relying on a new push event.
+
+WIT package release tasks in `Taskfile.yml` are still available for manual execution.
 
 ```bash
 task release:dry-run TAG=0.1.0
 task release:publish VERSION=0.1.0
 ```
 
-The release workflow also publishes crate releases and WIT artifacts through repository automation.
+Manual fallback workflow is available in `.github/workflows/release.yml` via `workflow_dispatch`.
 
 ## License
 
