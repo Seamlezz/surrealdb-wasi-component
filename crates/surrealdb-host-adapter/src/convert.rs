@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use anyhow::{Result, bail};
 use serde_cbor::Value as CborValue;
 use serde_json::{Map as JsonMap, Number as JsonNumber, Value as JsonValue};
-use surrealdb::Value as SurrealValue;
+use surrealdb_types::Value as SurrealValue;
 
 pub fn cbor_slice_to_json(bytes: &[u8]) -> Result<JsonValue> {
     let value: CborValue = serde_cbor::from_slice(bytes)?;

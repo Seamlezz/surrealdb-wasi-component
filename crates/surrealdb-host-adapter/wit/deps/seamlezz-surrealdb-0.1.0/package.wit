@@ -1,0 +1,5 @@
+package seamlezz:surrealdb@0.1.0;
+
+interface call {
+  query: func(query: string, params: list<tuple<string, list<u8>>>) -> list<result<list<u8>, string>>;
+}
