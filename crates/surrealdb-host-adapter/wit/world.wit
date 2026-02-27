@@ -1,5 +1,0 @@
-package seamlezz:surrealdb-host-adapter@0.1.0;
-
-world adapter {
-  import seamlezz:surrealdb/call@0.1.0;
-}
