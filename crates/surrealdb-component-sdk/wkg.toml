@@ -1,0 +1,2 @@
+[overrides]
+"seamlezz:surrealdb" = { path = "../../wit/world.wit" }
