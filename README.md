@@ -7,15 +7,15 @@ Build and run SurrealDB powered WASI components with a shared WIT contract, a gu
 This workspace provides the pieces needed to let a WASI component run SurrealDB queries through a host runtime.
 
 1. `crates/surrealdb-component-sdk` gives guest components a Rust API for query execution.
-2. `crates/surrealdb-host-adapter` connects the host runtime to a configured SurrealDB instance.
-3. `wit/` defines the `seamlezz:surrealdb@0.1.0` interface contract.
-4. `examples/guest-demo` shows the guest side query flow.
+2. `crates/surrealdb-host-adapter` connects the host runtime to SurrealDB.
+3. `wit/` defines the `seamlezz:surrealdb@0.2.0` interface contract.
+4. `examples/guest-demo` shows the guest side query and live query flow.
 
 ## Workspace Layout
 
 1. `crates/surrealdb-component-sdk`: SDK for guest components that target `wasm32-wasip2`.
 2. `crates/surrealdb-host-adapter`: host adapter for Wasmtime component linking.
-3. `examples/guest-demo`: minimal guest example that calls `query().bind().execute()`.
+3. `examples/guest-demo`: guest example that runs query and live query operations.
 4. `examples/host-wasmtime`: runnable host example for Wasmtime integration.
 5. `wit/README.md`: package information for the WIT contract.
 
@@ -42,11 +42,14 @@ task wit:fetch
 task fmt
 task lint
 task test
+task test:examples
 task build:host
 task build:sdk
 task build:demo
 task ci
 ```
+
+`task test:examples` runs the guest demo through `host-wasmtime` against an in memory SurrealDB engine and fails if query, subscribe, or cancel calls are not observed.
 
 ## Typical Usage Paths
 
@@ -60,11 +63,11 @@ See `crates/surrealdb-component-sdk/README.md`.
 
 ### Wire a host runtime
 
-1. Create and authenticate a `Surreal<Any>` database client.
-2. Define host state and implement your generated `seamlezz::surrealdb::call::Host` trait.
-3. Forward `call::Host::query` to `surrealdb_host_adapter::query`.
-4. Register generated bindings with `Adapter::add_to_linker`.
-5. Instantiate with `Adapter::instantiate_async`.
+1. Create a `Surreal<Any>` database client and connect it.
+2. Define host state and implement your generated `seamlezz::surrealdb::call` host traits.
+3. Register WASI and generated bindings with `add_to_linker_async` and `Adapter::add_to_linker`.
+4. Instantiate the component with `linker.instantiate_async` and create typed bindings with `Adapter::new`.
+5. Call exported guest functions through `store.run_concurrent`.
 
 See `crates/surrealdb-host-adapter/README.md` and `examples/host-wasmtime/src/main.rs`.
 
