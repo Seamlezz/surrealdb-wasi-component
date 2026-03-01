@@ -1,6 +1,6 @@
 # surrealdb-host-adapter
 
-Rust host helper for the `seamlezz:surrealdb` WIT contract. This crate exposes query execution and conversion logic. Your host runtime provides state, generated bindings, and linker wiring.
+Rust host helper for the `seamlezz:surrealdb` WIT contract. This crate exposes query and live query execution plus conversion logic. Your host runtime provides state, generated bindings, and linker wiring.
 
 ## Core API
 
@@ -22,81 +22,39 @@ pub async fn query(
 
 ## Wasmtime wiring pattern
 
-The host application owns the adapter type and WIT bindings. The `query` function is called from your generated `call::Host` implementation.
+The host application owns the adapter type and WIT bindings. The adapter `query` and live query helpers are called from generated host trait implementations.
 
-```rust
-use std::sync::Arc;
-use surrealdb::Surreal;
-use surrealdb::engine::any::Any;
-use tokio::sync::RwLock;
+See `examples/host-wasmtime/src/main.rs` for the complete wiring, including:
 
-mod bindings {
-    wasmtime::component::bindgen!({
-        path: "wit",
-        world: "adapter",
-        imports: { default: async | trappable },
-        exports: { default: async },
-    });
-}
-
-#[derive(Clone)]
-pub struct HostState {
-    db: Arc<RwLock<Surreal<Any>>>,
-}
-
-impl bindings::seamlezz::surrealdb::call::Host for HostState {
-    async fn query(
-        &mut self,
-        query: String,
-        params: Vec<(String, Vec<u8>)>,
-    ) -> wasmtime::Result<Vec<Result<Vec<u8>, String>>> {
-        let db = self.db.read().await;
-        surrealdb_host_adapter::query(&db, query, params)
-            .await
-            .map_err(wasmtime::Error::new)
-    }
-}
-```
+1. `bindgen!` with `imports: { default: async | store | trappable }`.
+2. Linker setup with `wasmtime_wasi::p2::add_to_linker_async` and `bindings::Adapter::add_to_linker`.
+3. Raw instance creation with `linker.instantiate_async`.
+4. Typed export calls through `store.run_concurrent`.
 
 ## Runtime sequence
 
-1. Create and authenticate a `Surreal<Any>` client.
+1. Create and connect a `Surreal<Any>` client.
 2. Create host state that stores the client.
 3. Generate and register bindings with `bindings::Adapter::add_to_linker`.
 4. Create `Store` with host state.
-5. Instantiate the component with `bindings::Adapter::instantiate_async`.
+5. Instantiate with `linker.instantiate_async` and construct typed bindings with `bindings::Adapter::new`.
+6. Call guest exports through `store.run_concurrent`.
 
 ## Run the example host
-
-Start SurrealDB:
-
-```bash
-docker run --rm -p 8000:8000 surrealdb/surrealdb:latest start --user root --pass root
-```
 
 Build a guest component:
 
 ```bash
 cargo build -p guest-demo --target wasm32-wasip2
-wasm-tools component new target/wasm32-wasip2/debug/guest_demo.wasm -o guest-demo.component.wasm
 ```
 
-Run with defaults:
+Run the example host with memory backed SurrealDB:
 
 ```bash
-cargo run -p host-wasmtime -- guest-demo.component.wasm
+cargo run -p host-wasmtime -- target/wasm32-wasip2/debug/guest_demo.wasm
 ```
 
-Run with custom connection settings:
-
-```bash
-SURREAL_DB_URL=http://127.0.0.1:8000 \
-SURREAL_DB_USER=root \
-SURREAL_DB_PASS=root \
-SURREAL_DB_NS=app \
-SURREAL_DB_NAME=app \
-cargo run -p host-wasmtime -- guest-demo.component.wasm
-```
+The example host always validates that guest `query`, `subscribe`, and `cancel` calls executed.
 
 ## Related docs
 

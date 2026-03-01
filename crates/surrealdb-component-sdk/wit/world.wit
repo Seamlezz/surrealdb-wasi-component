@@ -1,5 +1,5 @@
-package seamlezz:surrealdb-component-sdk@0.1.0;
+package seamlezz:surrealdb-component-sdk@0.2.0;
 
 world component {
-  import seamlezz:surrealdb/call@0.1.0;
+  import seamlezz:surrealdb/call@0.2.0;
 }
