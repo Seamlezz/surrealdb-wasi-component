@@ -2,8 +2,8 @@ use std::any::type_name;
 
 use anyhow::{Context, Result, anyhow};
 use ciborium::into_writer;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::bindings::seamlezz::surrealdb::call;
 

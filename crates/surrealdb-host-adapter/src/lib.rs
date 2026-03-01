@@ -58,7 +58,8 @@ fn decode_params<E>(
 ) -> Result<Vec<(String, serde_json::Value)>, E> {
     let mut decoded = Vec::with_capacity(params.len());
     for (key, value) in params {
-        let decoded_value = cbor_slice_to_json(&value).map_err(|source| map_error(key.clone(), source))?;
+        let decoded_value =
+            cbor_slice_to_json(&value).map_err(|source| map_error(key.clone(), source))?;
         decoded.push((key, decoded_value));
     }
 
@@ -71,7 +72,10 @@ pub async fn query(
     params: Vec<(String, Vec<u8>)>,
 ) -> Result<Vec<Result<Vec<u8>, String>>, QueryError> {
     let mut query_builder = db.query(&query);
-    let decoded = decode_params(params, |key, source| QueryError::ParamDecode { key, source })?;
+    let decoded = decode_params(params, |key, source| QueryError::ParamDecode {
+        key,
+        source,
+    })?;
 
     let ordered = ordered_params(decoded);
     query_builder = query_builder.bind(ordered);
@@ -98,7 +102,10 @@ pub async fn subscribe(
     params: Vec<(String, Vec<u8>)>,
 ) -> Result<QueryStream<Notification<Value>>, SubscribeError> {
     let mut query_builder = db.query(&query);
-    let decoded = decode_params(params, |key, source| SubscribeError::ParamDecode { key, source })?;
+    let decoded = decode_params(params, |key, source| SubscribeError::ParamDecode {
+        key,
+        source,
+    })?;
 
     let ordered = ordered_params(decoded);
     query_builder = query_builder.bind(ordered);
