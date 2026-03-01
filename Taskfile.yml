@@ -25,6 +25,11 @@ tasks:
     cmds:
       - cargo test --workspace
 
+  test:examples:
+    cmds:
+      - cargo build -p guest-demo --target wasm32-wasip2
+      - cargo run -p host-wasmtime -- target/wasm32-wasip2/debug/guest_demo.wasm
+
   build:host:
     cmds:
       - cargo build -p surrealdb-host-adapter
@@ -47,6 +52,7 @@ tasks:
       - fmt:check
       - lint
       - test
+      - test:examples
       - build:host
       - build:sdk
       - build:demo

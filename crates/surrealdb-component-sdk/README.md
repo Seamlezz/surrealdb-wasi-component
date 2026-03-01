@@ -1,6 +1,6 @@
 # surrealdb-component-sdk
 
-Rust SDK for guest WASI components that need to execute SurrealDB queries through the `seamlezz:surrealdb` WIT interface.
+Rust SDK for guest WASI components that need to execute SurrealDB queries and live queries through the `seamlezz:surrealdb` WIT interface.
 
 ## What this crate provides
 
@@ -41,6 +41,46 @@ async fn run() -> Result<()> {
 }
 ```
 
+## Live Queries
+
+```rust
+use anyhow::{Context, Result};
+use surrealdb_component_sdk::{LiveAction, query, subscribe};
+
+async fn run_live() -> Result<()> {
+    let mut subscription = subscribe("LIVE SELECT * FROM person WHERE id = $id")
+        .bind("id", "person:demo")
+        .execute()
+        .await?;
+
+    query("CREATE person:demo CONTENT { id: person:demo, name: 'demo', age: 42 }")
+        .execute()
+        .await?;
+
+    let event = subscription
+        .next_event()
+        .await?
+        .context("live stream ended")?;
+
+    let payload: serde_json::Value = event.parse()?;
+    match event.action {
+        LiveAction::Create => {
+            let _ = payload;
+        }
+        LiveAction::Update => {
+            let _ = payload;
+        }
+        LiveAction::Delete => {
+            let _ = payload;
+        }
+        LiveAction::Killed => {}
+    }
+
+    subscription.cancel().await?;
+    Ok(())
+}
+```
+
 ## Result Handling
 
 `QueryResultHolder` stores one entry per statement.
@@ -66,14 +106,16 @@ async fn run() -> Result<()> {
 
 ## Contract expectations
 
-The crate calls the async WIT function:
+The crate calls async WIT functions for both regular and live query flows:
 
-`call.query(query: string, params: list<tuple<string, list<u8>>>) -> list<result<list<u8>, string>>`
+1. `call.query(query: string, params: list<tuple<string, list<u8>>>) -> list<result<list<u8>, string>>`
+2. `call.subscribe(query: string, params: list<tuple<string, list<u8>>>) -> tuple<u64, stream<live-event>>`
+3. `call.cancel(subscription-id: u64) -> result<_, string>`
 
-Parameter and result payloads are CBOR encoded.
+Parameter payloads and live event payloads are CBOR encoded.
 
 ## Related docs
 
 1. Workspace overview: `README.md`
 2. Host side adapter: `crates/surrealdb-host-adapter/README.md`
-3. Guest example: `examples/guest-demo/src/main.rs`
+3. Guest example: `examples/guest-demo/src/lib.rs`
