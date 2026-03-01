@@ -1,0 +1,10 @@
+package seamlezz:surrealdb-host-adapter@0.2.0;
+
+interface demo {
+  run: async func() -> result<_, string>;
+}
+
+world adapter {
+  import seamlezz:surrealdb/call@0.2.0;
+  export demo;
+}
