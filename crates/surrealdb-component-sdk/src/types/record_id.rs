@@ -7,22 +7,22 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct RecordId {
-    pub tb: String,
-    pub id: RecordIdKey,
+    pub table: String,
+    pub key: RecordIdKey,
 }
 
 impl RecordId {
     pub fn new(tb: impl Into<String>, id: impl Into<String>) -> Self {
         Self {
-            tb: tb.into(),
-            id: RecordIdKey::String(id.into()),
+            table: tb.into(),
+            key: RecordIdKey::String(id.into()),
         }
     }
 }
 
 impl fmt::Display for RecordId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.tb, self.id)
+        write!(f, "{}:{}", self.table, self.key)
     }
 }
 
@@ -362,8 +362,8 @@ impl<'de> Deserialize<'de> for RecordId {
 
         let inner = RecordIdInner::deserialize(deserializer)?;
         Ok(Self {
-            tb: inner.tb,
-            id: inner.id,
+            table: inner.tb,
+            key: inner.id,
         })
     }
 }
