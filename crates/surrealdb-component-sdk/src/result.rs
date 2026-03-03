@@ -1,6 +1,6 @@
 use std::any::type_name;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use serde::de::DeserializeOwned;
 
 pub trait SingleQueryResultExtractor: Sized {
@@ -8,7 +8,7 @@ pub trait SingleQueryResultExtractor: Sized {
 }
 
 fn parse<D: DeserializeOwned>(bytes: &[u8]) -> Result<D> {
-    ciborium::from_reader::<D, _>(bytes).with_context(|| {
+    serde_cbor::from_slice::<D>(bytes).with_context(|| {
         format!(
             "failed to parse query result into type {}",
             type_name::<D>()

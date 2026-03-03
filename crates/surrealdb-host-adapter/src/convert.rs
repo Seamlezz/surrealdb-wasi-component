@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use serde_cbor::Value as CborValue;
 use serde_json::{Map as JsonMap, Number as JsonNumber, Value as JsonValue};
 use surrealdb_types::Value as SurrealValue;
@@ -59,9 +59,7 @@ pub fn cbor_to_json(value: CborValue) -> Result<JsonValue> {
 }
 
 pub fn surreal_to_cbor_bytes(value: SurrealValue) -> Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    ciborium::into_writer(&value, &mut bytes)?;
-    Ok(bytes)
+    Ok(serde_cbor::to_vec(&value)?)
 }
 
 pub fn ordered_params(params: Vec<(String, JsonValue)>) -> BTreeMap<String, JsonValue> {

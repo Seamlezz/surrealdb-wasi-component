@@ -1,7 +1,6 @@
 use std::any::type_name;
 
 use anyhow::{Context, Result};
-use ciborium::into_writer;
 use serde::Serialize;
 
 use crate::bindings::seamlezz::surrealdb::call;
@@ -20,13 +19,15 @@ impl<'a> Query<'a> {
         }
 
         let key = key.into();
-        let mut serialized = Vec::new();
-        if let Err(error) = into_writer(&value, &mut serialized)
+        let serialized = match serde_cbor::to_vec(&value)
             .with_context(|| format!("failed to bind key {key} with type {}", type_name::<T>()))
         {
-            self.bind_error = Some(error);
-            return self;
-        }
+            Ok(serialized) => serialized,
+            Err(error) => {
+                self.bind_error = Some(error);
+                return self;
+            }
+        };
 
         self.params.push((key, serialized));
         self

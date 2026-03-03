@@ -4506,14 +4506,14 @@ dependencies = [
 
 [[package]]
 name = "surrealdb-component-sdk"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "chrono",
- "ciborium",
  "futures-util",
  "prost-types",
  "serde",
+ "serde_cbor",
  "serde_json",
  "wit-bindgen 0.53.1",
 ]
@@ -4610,10 +4610,9 @@ dependencies = [
 
 [[package]]
 name = "surrealdb-host-adapter"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
- "ciborium",
  "serde",
  "serde_cbor",
  "serde_json",

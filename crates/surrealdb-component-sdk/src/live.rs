@@ -1,7 +1,6 @@
 use std::any::type_name;
 
 use anyhow::{Context, Result, anyhow};
-use ciborium::into_writer;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -25,7 +24,7 @@ pub struct LiveEvent {
 
 impl LiveEvent {
     pub fn parse<D: DeserializeOwned>(&self) -> Result<D> {
-        ciborium::from_reader::<D, _>(self.data.as_slice()).with_context(|| {
+        serde_cbor::from_slice::<D>(self.data.as_slice()).with_context(|| {
             format!(
                 "failed to parse live event data into type {}",
                 type_name::<D>()
@@ -96,14 +95,15 @@ impl<'a> LiveQuery<'a> {
         }
 
         let key = key.into();
-        let mut serialized = Vec::new();
-
-        if let Err(error) = into_writer(&value, &mut serialized)
-            .with_context(|| format!("failed to bind key {} with type {}", key, type_name::<T>()))
-        {
-            self.bind_error = Some(error);
-            return self;
-        }
+        let serialized = match serde_cbor::to_vec(&value).with_context(|| {
+            format!("failed to bind key {} with type {}", key, type_name::<T>())
+        }) {
+            Ok(serialized) => serialized,
+            Err(error) => {
+                self.bind_error = Some(error);
+                return self;
+            }
+        };
 
         self.params.push((key, serialized));
         self
