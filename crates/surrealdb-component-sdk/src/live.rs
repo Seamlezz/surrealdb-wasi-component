@@ -95,9 +95,9 @@ impl<'a> LiveQuery<'a> {
         }
 
         let key = key.into();
-        let serialized = match serde_cbor::to_vec(&value).with_context(|| {
-            format!("failed to bind key {} with type {}", key, type_name::<T>())
-        }) {
+        let serialized = match serde_cbor::to_vec(&value)
+            .with_context(|| format!("failed to bind key {} with type {}", key, type_name::<T>()))
+        {
             Ok(serialized) => serialized,
             Err(error) => {
                 self.bind_error = Some(error);

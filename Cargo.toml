@@ -35,7 +35,7 @@ wasmtime = { version = "42", features = [
     "component-model-async",
 ] }
 wasmtime-wasi = { version = "42", features = ["p2", "p3"] }
-wasip3 = "*"
+wasip3 = "0.4.0"
 wit-bindgen = "0.53"
 tokio = { version = "1", features = ["sync"] }
 thiserror = "2"

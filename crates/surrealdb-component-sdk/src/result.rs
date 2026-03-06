@@ -1,6 +1,6 @@
 use std::any::type_name;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use serde::de::DeserializeOwned;
 
 pub trait SingleQueryResultExtractor: Sized {

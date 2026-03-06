@@ -12,9 +12,7 @@ macro_rules! debug_log {
 
 #[cfg(not(feature = "debug-logs"))]
 macro_rules! debug_log {
-    ($($arg:tt)*) => {
-        {};
-    };
+    ($($arg:tt)*) => {{};};
 }
 
 pub struct SubscriptionTask {
