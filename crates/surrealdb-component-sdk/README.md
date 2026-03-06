@@ -7,7 +7,7 @@ Rust SDK for guest WASI components that need to execute SurrealDB queries and li
 1. Query builder entry point with `query("...")`.
 2. Typed parameter binding with CBOR serialization.
 3. Result extraction helpers for statement based SurrealDB responses.
-4. Utility types for SurrealDB style values, including `Datetime` and `RecordId`.
+4. Utility types for SurrealDB style values, including `Bytes`, `Datetime`, `Decimal`, `Duration`, `Geometry`, `RecordId`, `RecordIdKey`, `Regex`, and `Uuid`.
 
 ## Installation
 
@@ -103,6 +103,14 @@ async fn run_live() -> Result<()> {
 1. `Datetime`: wrapper around `chrono::DateTime<Utc>` with flexible deserialization from RFC3339 strings and unix timestamp values.
 2. `RecordId`: table plus key model for SurrealDB records.
 3. `RecordIdKey`: key variants for numeric, string, uuid like, array, and object forms.
+4. `Bytes`: wrapper for raw binary values.
+5. `Decimal`: wrapper for SurrealDB decimal encoded text values.
+6. `Duration`: wrapper for SurrealDB duration encoded text values.
+7. `Geometry`: wrapper for geometry JSON values.
+8. `Regex`: wrapper for SurrealDB regex encoded text values.
+9. `Uuid`: wrapper for UUID encoded text values.
+
+`RecordId` supports both canonical `{ table, key }` and legacy `{ tb, id }` map forms when deserializing query results.
 
 ## Contract expectations
 

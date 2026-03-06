@@ -12,7 +12,7 @@ pub async fn query(
 ) -> Result<Vec<Result<Vec<u8>, String>>, QueryError>
 ```
 
-`query` decodes guest CBOR parameters, executes the SurrealDB statement set, and encodes each statement result back to CBOR.
+`query` decodes guest CBOR parameters, executes the SurrealDB statement set, and encodes each statement result back to normalized CBOR.
 
 ## QueryError behavior
 
@@ -51,10 +51,12 @@ cargo build -p guest-demo --target wasm32-wasip2
 Run the example host with memory backed SurrealDB:
 
 ```bash
-cargo run -p host-wasmtime -- target/wasm32-wasip2/debug/guest_demo.wasm
+cargo run -p host-wasmtime --features surrealdb-host-adapter/debug-logs -- target/wasm32-wasip2/debug/guest_demo.wasm
 ```
 
 The example host always validates that guest `query`, `subscribe`, and `cancel` calls executed.
+
+Use the `surrealdb-host-adapter/debug-logs` feature while validating end to end flows to print query, subscription, and stream lifecycle details.
 
 ## Related docs
 

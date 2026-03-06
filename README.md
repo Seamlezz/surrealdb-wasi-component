@@ -25,7 +25,7 @@ This workspace provides the pieces needed to let a WASI component run SurrealDB 
 2. The host adapter receives the call via generated WIT bindings.
 3. The adapter converts CBOR parameters into JSON values for SurrealDB.
 4. SurrealDB executes the statement set.
-5. The adapter serializes each statement result back to CBOR and returns per statement success or error values.
+5. The adapter serializes each statement result back to normalized CBOR and returns per statement success or error values.
 
 ## Quickstart
 
@@ -51,6 +51,13 @@ task ci
 
 `task test:examples` runs the guest demo through `host-wasmtime` against an in memory SurrealDB engine and fails if query, subscribe, or cancel calls are not observed.
 
+Manual equivalent:
+
+```bash
+cargo build -p guest-demo --target wasm32-wasip2
+cargo run -p host-wasmtime --features surrealdb-host-adapter/debug-logs -- target/wasm32-wasip2/debug/guest_demo.wasm
+```
+
 ## Typical Usage Paths
 
 ### Build a guest component
@@ -58,6 +65,7 @@ task ci
 1. Add `surrealdb-component-sdk` to your guest crate.
 2. Use `query("...").bind("key", value).execute().await`.
 3. Parse results with `parse`, `parse_result`, `take`, or `take_result`.
+4. Use helper wrappers such as `Datetime`, `RecordId`, `Bytes`, `Decimal`, `Duration`, `Geometry`, `Regex`, and `Uuid` for SurrealDB typed values.
 
 See `crates/surrealdb-component-sdk/README.md`.
 
@@ -78,6 +86,7 @@ Components are released independently when their own version changes on `main`.
 1. `crates/surrealdb-component-sdk/Cargo.toml` version bump releases the SDK crate.
 2. `crates/surrealdb-host-adapter/Cargo.toml` version bump releases the host adapter crate.
 3. `wit/world.wit` package version bump releases the WIT OCI artifact.
+4. Example crate version bumps in `examples/guest-demo/Cargo.toml` and `examples/host-wasmtime/Cargo.toml` track runnable example updates in this repository.
 
 The automation is defined in `.github/workflows/release-components.yml`.
 
