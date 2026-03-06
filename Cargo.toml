@@ -18,6 +18,7 @@ chrono = { version = "0.4", default-features = false, features = [
     "clock",
     "serde",
 ] }
+futures-util = "0.3"
 prost-types = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
@@ -33,6 +34,8 @@ wasmtime = { version = "42", features = [
     "async",
     "component-model-async",
 ] }
-wasmtime-wasi = "42"
+wasmtime-wasi = { version = "42", features = ["p2", "p3"] }
+wasip3 = "*"
 wit-bindgen = "0.53"
 tokio = { version = "1", features = ["sync"] }
+thiserror = "2"

@@ -28,11 +28,11 @@ tasks:
   test:examples:
     cmds:
       - cargo build -p guest-demo --target wasm32-wasip2
-      - cargo run -p host-wasmtime -- target/wasm32-wasip2/debug/guest_demo.wasm
+      - cargo run -p host-wasmtime --features surrealdb-host-adapter/debug-logs -- target/wasm32-wasip2/debug/guest_demo.wasm
 
   build:host:
     cmds:
-      - cargo build -p surrealdb-host-adapter
+      - cargo build -p surrealdb-host-adapter --features debug-logs
 
   build:sdk:
     cmds:

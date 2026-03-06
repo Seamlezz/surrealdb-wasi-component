@@ -3,6 +3,20 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::{Mutex, oneshot};
 use tokio::task::JoinHandle;
 
+#[cfg(feature = "debug-logs")]
+macro_rules! debug_log {
+    ($($arg:tt)*) => {
+        println!($($arg)*);
+    };
+}
+
+#[cfg(not(feature = "debug-logs"))]
+macro_rules! debug_log {
+    ($($arg:tt)*) => {
+        {};
+    };
+}
+
 pub struct SubscriptionTask {
     stop_tx: oneshot::Sender<()>,
     handle: JoinHandle<()>,
@@ -34,23 +48,61 @@ impl SubscriptionManager {
     }
 
     pub fn allocate_id(&self) -> u64 {
-        self.next_id.fetch_add(1, Ordering::Relaxed)
+        let subscription_id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        debug_log!(
+            "subscription manager allocate id. subscription_id={}",
+            subscription_id
+        );
+        subscription_id
     }
 
     pub async fn register(&self, subscription_id: u64, task: SubscriptionTask) {
+        debug_log!(
+            "subscription manager register begin. subscription_id={}",
+            subscription_id
+        );
         self.tasks.lock().await.insert(subscription_id, task);
+        debug_log!(
+            "subscription manager register complete. subscription_id={}",
+            subscription_id
+        );
     }
 
     pub async fn complete(&self, subscription_id: u64) {
+        debug_log!(
+            "subscription manager complete begin. subscription_id={}",
+            subscription_id
+        );
         self.tasks.lock().await.remove(&subscription_id);
+        debug_log!(
+            "subscription manager complete done. subscription_id={}",
+            subscription_id
+        );
     }
 
     pub async fn cancel(&self, subscription_id: u64) -> bool {
+        debug_log!(
+            "subscription manager cancel begin. subscription_id={}",
+            subscription_id
+        );
         let Some(task) = self.tasks.lock().await.remove(&subscription_id) else {
+            debug_log!(
+                "subscription manager cancel missing. subscription_id={}",
+                subscription_id
+            );
             return false;
         };
 
+        debug_log!(
+            "subscription manager cancel task found. subscription_id={}",
+            subscription_id
+        );
+
         task.stop().await;
+        debug_log!(
+            "subscription manager cancel complete. subscription_id={}",
+            subscription_id
+        );
         true
     }
 

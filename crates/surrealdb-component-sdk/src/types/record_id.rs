@@ -12,10 +12,10 @@ pub struct RecordId {
 }
 
 impl RecordId {
-    pub fn new(tb: impl Into<String>, id: impl Into<String>) -> Self {
+    pub fn new(table: impl Into<String>, key: impl Into<String>) -> Self {
         Self {
-            table: tb.into(),
-            key: RecordIdKey::String(id.into()),
+            table: table.into(),
+            key: RecordIdKey::String(key.into()),
         }
     }
 }
@@ -327,6 +327,8 @@ impl<'de> Deserialize<'de> for RecordIdKey {
                         ("Number", TaggedValue::Number(v)) => RecordIdKey::Number(v),
                         ("Integer", TaggedValue::Number(v)) => RecordIdKey::Number(v),
                         ("Uuid", TaggedValue::Uuid(v)) => RecordIdKey::Uuid(v),
+                        ("$surrealdb::uuid", TaggedValue::String(v)) => RecordIdKey::Uuid(v),
+                        ("uuid", TaggedValue::String(v)) => RecordIdKey::Uuid(v),
                         ("Array", TaggedValue::Array(v)) => RecordIdKey::Array(v),
                         ("Object", TaggedValue::Object(v)) => RecordIdKey::Object(v),
                         (tag, other) => {
@@ -355,16 +357,34 @@ impl<'de> Deserialize<'de> for RecordId {
         D: Deserializer<'de>,
     {
         #[derive(Deserialize)]
-        struct RecordIdInner {
+        struct CanonicalRecordId {
+            table: String,
+            key: RecordIdKey,
+        }
+
+        #[derive(Deserialize)]
+        struct LegacyRecordId {
             tb: String,
             id: RecordIdKey,
         }
 
-        let inner = RecordIdInner::deserialize(deserializer)?;
-        Ok(Self {
-            table: inner.tb,
-            key: inner.id,
-        })
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum RecordIdInner {
+            Canonical(CanonicalRecordId),
+            Legacy(LegacyRecordId),
+        }
+
+        match RecordIdInner::deserialize(deserializer)? {
+            RecordIdInner::Canonical(inner) => Ok(Self {
+                table: inner.table,
+                key: inner.key,
+            }),
+            RecordIdInner::Legacy(inner) => Ok(Self {
+                table: inner.tb,
+                key: inner.id,
+            }),
+        }
     }
 }
 

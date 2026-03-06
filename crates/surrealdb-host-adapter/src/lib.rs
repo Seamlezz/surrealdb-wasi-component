@@ -114,9 +114,10 @@ pub async fn subscribe(
         .await
         .map_err(SubscribeError::QueryExecution)?;
 
-    response
+    let stream = response
         .stream::<Notification<Value>>(())
-        .map_err(SubscribeError::StreamOpen)
+        .map_err(SubscribeError::StreamOpen)?;
+    Ok(stream)
 }
 
 pub fn notification_to_live_event(
@@ -132,11 +133,10 @@ pub fn notification_to_live_event(
 
     let data = surreal_to_cbor_bytes(notification.data).map_err(SubscribeError::Serialize)?;
 
-    let event = LiveEvent {
+    Ok(LiveEvent {
         subscription_id,
         query_id: notification.query_id.to_string(),
         action,
         data,
-    };
-    Ok(event)
+    })
 }
