@@ -5,6 +5,7 @@ mod duration;
 mod geometry;
 mod record_id;
 mod regex;
+mod tagged_scalar;
 mod uuid;
 
 pub use bytes::Bytes;

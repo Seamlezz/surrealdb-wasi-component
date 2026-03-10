@@ -2,11 +2,13 @@ use std::collections::HashMap;
 use std::fmt;
 use std::ops::Deref;
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::types::tagged_scalar::serialize_tagged_scalar;
 
 const DURATION_TAG: &str = "$surrealdb::duration";
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Duration(pub String);
 
 impl Duration {
@@ -47,6 +49,15 @@ impl From<&str> for Duration {
     }
 }
 
+impl Serialize for Duration {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serialize_tagged_scalar(serializer, DURATION_TAG, &self.0)
+    }
+}
+
 impl<'de> Deserialize<'de> for Duration {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -77,5 +88,18 @@ impl<'de> Deserialize<'de> for Duration {
                 Err(serde::de::Error::custom("invalid duration representation"))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::Duration;
+
+    #[test]
+    fn serializes_as_tagged_map() {
+        let value = serde_json::to_value(Duration::from("1h30m")).unwrap();
+        assert_eq!(value, json!({"$surrealdb::duration": "1h30m"}));
     }
 }

@@ -11,6 +11,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
+chrono.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 surrealdb-component-sdk = { path = "../../crates/surrealdb-component-sdk" }
 wit-bindgen.workspace = true

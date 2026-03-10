@@ -2,11 +2,13 @@ use std::collections::HashMap;
 use std::fmt;
 use std::ops::Deref;
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::types::tagged_scalar::serialize_tagged_scalar;
 
 const REGEX_TAG: &str = "$surrealdb::regex";
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Regex(pub String);
 
 impl Regex {
@@ -47,6 +49,15 @@ impl From<&str> for Regex {
     }
 }
 
+impl Serialize for Regex {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serialize_tagged_scalar(serializer, REGEX_TAG, &self.0)
+    }
+}
+
 impl<'de> Deserialize<'de> for Regex {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -77,5 +88,18 @@ impl<'de> Deserialize<'de> for Regex {
                 Err(serde::de::Error::custom("invalid regex representation"))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::Regex;
+
+    #[test]
+    fn serializes_as_tagged_map() {
+        let value = serde_json::to_value(Regex::from("^[a-z]+$")).unwrap();
+        assert_eq!(value, json!({"$surrealdb::regex": "^[a-z]+$"}));
     }
 }

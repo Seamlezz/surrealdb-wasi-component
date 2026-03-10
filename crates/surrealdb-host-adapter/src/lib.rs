@@ -1,7 +1,7 @@
 mod convert;
 mod manager;
 
-use convert::{cbor_slice_to_json, ordered_params, surreal_to_cbor_bytes};
+use convert::{cbor_slice_to_surreal, ordered_params, surreal_to_cbor_bytes};
 use surrealdb::{Notification, Surreal, engine::any::Any, method::QueryStream};
 use surrealdb_types::{Action, Value};
 use thiserror::Error;
@@ -55,11 +55,11 @@ pub enum SubscribeError {
 fn decode_params<E>(
     params: Vec<(String, Vec<u8>)>,
     map_error: impl Fn(String, anyhow::Error) -> E,
-) -> Result<Vec<(String, serde_json::Value)>, E> {
+) -> Result<Vec<(String, Value)>, E> {
     let mut decoded = Vec::with_capacity(params.len());
     for (key, value) in params {
         let decoded_value =
-            cbor_slice_to_json(&value).map_err(|source| map_error(key.clone(), source))?;
+            cbor_slice_to_surreal(&value).map_err(|source| map_error(key.clone(), source))?;
         decoded.push((key, decoded_value));
     }
 
@@ -118,6 +118,54 @@ pub async fn subscribe(
         .stream::<Notification<Value>>(())
         .map_err(SubscribeError::StreamOpen)?;
     Ok(stream)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use surrealdb::{Surreal, engine::any::Any};
+
+    use super::query;
+
+    async fn test_db() -> Surreal<Any> {
+        let db: Surreal<Any> = Surreal::init();
+        db.connect("memory").await.unwrap();
+        db.use_ns("host_adapter_tests")
+            .use_db("typed_transport")
+            .await
+            .unwrap();
+        db
+    }
+
+    #[tokio::test]
+    async fn binds_uuid_params_as_native_surreal_values() {
+        let db = test_db().await;
+        let param = serde_cbor::to_vec(&json!({
+            "$surrealdb::uuid": "018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"
+        }))
+        .unwrap();
+
+        let results = query(
+            &db,
+            "RETURN type::is_uuid($id); RETURN $id;".to_string(),
+            vec![("id".to_string(), param)],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 2);
+
+        let is_uuid =
+            serde_cbor::from_slice::<serde_json::Value>(results[0].as_ref().unwrap()).unwrap();
+        assert_eq!(is_uuid, json!(true));
+
+        let value =
+            serde_cbor::from_slice::<serde_json::Value>(results[1].as_ref().unwrap()).unwrap();
+        assert_eq!(
+            value,
+            json!({"$surrealdb::uuid": "018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"})
+        );
+    }
 }
 
 pub fn notification_to_live_event(

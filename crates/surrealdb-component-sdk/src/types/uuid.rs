@@ -2,11 +2,13 @@ use std::collections::HashMap;
 use std::fmt;
 use std::ops::Deref;
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::types::tagged_scalar::serialize_tagged_scalar;
 
 const UUID_TAG: &str = "$surrealdb::uuid";
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Uuid(pub String);
 
 impl Uuid {
@@ -47,6 +49,15 @@ impl From<&str> for Uuid {
     }
 }
 
+impl Serialize for Uuid {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serialize_tagged_scalar(serializer, UUID_TAG, &self.0)
+    }
+}
+
 impl<'de> Deserialize<'de> for Uuid {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -77,5 +88,22 @@ impl<'de> Deserialize<'de> for Uuid {
                 Err(serde::de::Error::custom("invalid uuid representation"))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::Uuid;
+
+    #[test]
+    fn serializes_as_tagged_map() {
+        let value =
+            serde_json::to_value(Uuid::from("018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d")).unwrap();
+        assert_eq!(
+            value,
+            json!({"$surrealdb::uuid": "018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"})
+        );
     }
 }

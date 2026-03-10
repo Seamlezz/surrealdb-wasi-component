@@ -3,7 +3,11 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 
 use serde::de::{MapAccess, SeqAccess, Visitor};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::types::tagged_scalar::serialize_tagged_scalar;
+
+const UUID_TAG: &str = "$surrealdb::uuid";
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct RecordId {
@@ -26,8 +30,7 @@ impl fmt::Display for RecordId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecordIdKey {
     Number(i64),
     String(String),
@@ -50,6 +53,21 @@ impl Hash for RecordIdKey {
                     val.hash(state);
                 }
             }
+        }
+    }
+}
+
+impl Serialize for RecordIdKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Number(value) => value.serialize(serializer),
+            Self::String(value) => value.serialize(serializer),
+            Self::Uuid(value) => serialize_tagged_scalar(serializer, UUID_TAG, value),
+            Self::Array(value) => value.serialize(serializer),
+            Self::Object(value) => value.serialize(serializer),
         }
     }
 }
@@ -415,5 +433,25 @@ impl From<Vec<RecordIdValue>> for RecordIdKey {
 impl From<HashMap<String, RecordIdValue>> for RecordIdKey {
     fn from(value: HashMap<String, RecordIdValue>) -> Self {
         Self::Object(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::RecordIdKey;
+
+    #[test]
+    fn serializes_uuid_keys_as_tagged_maps() {
+        let value = serde_json::to_value(RecordIdKey::Uuid(
+            "018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d".to_string(),
+        ))
+        .unwrap();
+
+        assert_eq!(
+            value,
+            json!({"$surrealdb::uuid": "018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"})
+        );
     }
 }
