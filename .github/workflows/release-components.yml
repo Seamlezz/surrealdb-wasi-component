@@ -43,9 +43,25 @@ jobs:
           FORCE_COMPONENT: ${{ github.event_name == 'workflow_dispatch' && inputs.component || '' }}
         run: bash .github/scripts/detect-releases.sh
 
-  publish:
+  test-examples:
     runs-on: ubuntu-latest
     needs: detect
+    if: needs.detect.outputs.count != '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+      - name: Install task
+        uses: arduino/setup-task@v2
+      - name: Run example tests
+        run: task test:examples
+
+  publish:
+    runs-on: ubuntu-latest
+    needs:
+      - detect
+      - test-examples
     if: needs.detect.outputs.count != '0'
     strategy:
       fail-fast: false

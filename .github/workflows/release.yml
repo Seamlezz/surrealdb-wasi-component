@@ -24,8 +24,22 @@ permissions:
   packages: write
 
 jobs:
+  test-examples:
+    runs-on: ubuntu-latest
+    if: inputs.publish_wit || inputs.publish_sdk || inputs.publish_host_adapter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+      - name: Install task
+        uses: arduino/setup-task@v2
+      - name: Run example tests
+        run: task test:examples
+
   publish-wit:
     runs-on: ubuntu-latest
+    needs: test-examples
     if: inputs.publish_wit
     steps:
       - uses: actions/checkout@v4
@@ -52,8 +66,14 @@ jobs:
 
   publish-crates:
     runs-on: ubuntu-latest
-    needs: publish-wit
-    if: always() && (inputs.publish_sdk || inputs.publish_host_adapter)
+    needs:
+      - test-examples
+      - publish-wit
+    if: >-
+      always() &&
+      needs.test-examples.result == 'success' &&
+      (inputs.publish_sdk || inputs.publish_host_adapter) &&
+      (needs.publish-wit.result == 'success' || needs.publish-wit.result == 'skipped')
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
