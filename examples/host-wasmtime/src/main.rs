@@ -338,7 +338,7 @@ impl bindings::seamlezz::surrealdb::call::HostWithStore for HasSelf<SurrealHostA
 
         let reader = accessor.with(|mut access| {
             StreamReader::new(access.as_context_mut(), LiveEventProducer::new(receiver))
-        });
+        })?;
         println!(
             "wasi host subscribe reader ready. subscription_id={}",
             subscription_id

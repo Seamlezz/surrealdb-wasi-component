@@ -32,7 +32,7 @@ jobs:
       matrix: ${{ steps.detect.outputs.matrix }}
       count: ${{ steps.detect.outputs.count }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Detect releasable components
@@ -48,7 +48,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.count != '0'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-wasip2
@@ -71,7 +71,7 @@ jobs:
       group: release-component-${{ matrix.component.id }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable

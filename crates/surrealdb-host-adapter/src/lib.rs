@@ -120,6 +120,27 @@ pub async fn subscribe(
     Ok(stream)
 }
 
+pub fn notification_to_live_event(
+    subscription_id: u64,
+    notification: Notification<Value>,
+) -> Result<LiveEvent, SubscribeError> {
+    let action = match notification.action {
+        Action::Create => LiveAction::Create,
+        Action::Update => LiveAction::Update,
+        Action::Delete => LiveAction::Delete,
+        Action::Killed | Action::Error => LiveAction::Killed,
+    };
+
+    let data = surreal_to_cbor_bytes(notification.data).map_err(SubscribeError::Serialize)?;
+
+    Ok(LiveEvent {
+        subscription_id,
+        query_id: notification.query_id.to_string(),
+        action,
+        data,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -166,25 +187,4 @@ mod tests {
             json!({"$surrealdb::uuid": "018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"})
         );
     }
-}
-
-pub fn notification_to_live_event(
-    subscription_id: u64,
-    notification: Notification<Value>,
-) -> Result<LiveEvent, SubscribeError> {
-    let action = match notification.action {
-        Action::Create => LiveAction::Create,
-        Action::Update => LiveAction::Update,
-        Action::Delete => LiveAction::Delete,
-        Action::Killed => LiveAction::Killed,
-    };
-
-    let data = surreal_to_cbor_bytes(notification.data).map_err(SubscribeError::Serialize)?;
-
-    Ok(LiveEvent {
-        subscription_id,
-        query_id: notification.query_id.to_string(),
-        action,
-        data,
-    })
 }

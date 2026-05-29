@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     if: inputs.publish_wit || inputs.publish_sdk || inputs.publish_host_adapter
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-wasip2
@@ -42,7 +42,7 @@ jobs:
     needs: test-examples
     if: inputs.publish_wit
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install task
         uses: arduino/setup-task@v2
       - name: Install wkg
@@ -75,7 +75,7 @@ jobs:
       (inputs.publish_sdk || inputs.publish_host_adapter) &&
       (needs.publish-wit.result == 'success' || needs.publish-wit.result == 'skipped')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - name: Validate crates publish token
         env:

@@ -120,13 +120,12 @@ fn map_to_surreal(values: BTreeMap<CborValue, CborValue>) -> Result<SurrealValue
     }
 
     if let (Some(SurrealValue::String(table)), Some(key)) = (object.get("table"), object.get("key"))
+        && let Ok(key) = SurrealRecordIdKey::from_value(key.clone())
     {
-        if let Ok(key) = SurrealRecordIdKey::from_value(key.clone()) {
-            return Ok(SurrealValue::RecordId(SurrealRecordId::new(
-                table.clone(),
-                key,
-            )));
-        }
+        return Ok(SurrealValue::RecordId(SurrealRecordId::new(
+            table.clone(),
+            key,
+        )));
     }
 
     Ok(SurrealValue::Object(object))
