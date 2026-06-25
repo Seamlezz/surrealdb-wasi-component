@@ -29,12 +29,12 @@ surrealdb = { version = "3", default-features = false, features = [
     "rustls",
 ] }
 surrealdb-types = "3"
-wasmtime = { version = "45", features = [
+wasmtime = { version = "46", features = [
     "component-model",
     "async",
     "component-model-async",
 ] }
-wasmtime-wasi = { version = "45", features = ["p2", "p3"] }
+wasmtime-wasi = { version = "46", features = ["p2", "p3"] }
 wasip3 = "0.7"
 wit-bindgen = "0.58"
 tokio = { version = "1", features = ["sync"] }

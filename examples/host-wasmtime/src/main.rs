@@ -177,8 +177,10 @@ impl<T> StreamProducer<T> for LiveEventProducer {
     }
 }
 
-impl bindings::seamlezz::surrealdb::call::HostWithStore for HasSelf<SurrealHostAdapter> {
-    async fn query<T: Send>(
+impl<T: Send> bindings::seamlezz::surrealdb::call::HostWithStore<T>
+    for HasSelf<SurrealHostAdapter>
+{
+    async fn query(
         accessor: &Accessor<T, Self>,
         query: String,
         params: Vec<(String, Vec<u8>)>,
@@ -205,7 +207,7 @@ impl bindings::seamlezz::surrealdb::call::HostWithStore for HasSelf<SurrealHostA
         result
     }
 
-    async fn subscribe<T: Send>(
+    async fn subscribe(
         accessor: &Accessor<T, Self>,
         query: String,
         params: Vec<(String, Vec<u8>)>,
@@ -347,7 +349,7 @@ impl bindings::seamlezz::surrealdb::call::HostWithStore for HasSelf<SurrealHostA
         Ok((subscription_id, reader))
     }
 
-    async fn cancel<T: Send>(
+    async fn cancel(
         accessor: &Accessor<T, Self>,
         subscription_id: u64,
     ) -> wasmtime::Result<Result<(), String>> {
