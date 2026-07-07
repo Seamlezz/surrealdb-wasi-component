@@ -187,4 +187,100 @@ mod tests {
             json!({"$surrealdb::uuid": "018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"})
         );
     }
+
+    #[tokio::test]
+    async fn binds_record_id_with_string_key_as_native_record() {
+        let db = test_db().await;
+        let param = serde_cbor::to_vec(&json!({"table": "person", "key": "demo"})).unwrap();
+
+        let results = query(
+            &db,
+            "RETURN $id = person:demo; RETURN type::is_record($id);".to_string(),
+            vec![("id".to_string(), param)],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 2);
+
+        let is_equal =
+            serde_cbor::from_slice::<serde_json::Value>(results[0].as_ref().unwrap()).unwrap();
+        assert_eq!(is_equal, json!(true));
+
+        let is_record =
+            serde_cbor::from_slice::<serde_json::Value>(results[1].as_ref().unwrap()).unwrap();
+        assert_eq!(is_record, json!(true));
+    }
+
+    #[tokio::test]
+    async fn binds_record_id_with_number_key_as_native_record() {
+        let db = test_db().await;
+        let param = serde_cbor::to_vec(&json!({"table": "person", "key": 42})).unwrap();
+
+        let results = query(
+            &db,
+            "RETURN $id = person:42; RETURN type::is_record($id);".to_string(),
+            vec![("id".to_string(), param)],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 2);
+
+        let is_equal =
+            serde_cbor::from_slice::<serde_json::Value>(results[0].as_ref().unwrap()).unwrap();
+        assert_eq!(is_equal, json!(true));
+
+        let is_record =
+            serde_cbor::from_slice::<serde_json::Value>(results[1].as_ref().unwrap()).unwrap();
+        assert_eq!(is_record, json!(true));
+    }
+
+    #[tokio::test]
+    async fn binds_record_id_with_uuid_key_as_native_record() {
+        let db = test_db().await;
+        let param = serde_cbor::to_vec(&json!({
+            "table": "person",
+            "key": {"$surrealdb::uuid": "018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"}
+        }))
+        .unwrap();
+
+        let results = query(
+            &db,
+            "RETURN type::is_record($id);".to_string(),
+            vec![("id".to_string(), param)],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 1);
+
+        let is_record =
+            serde_cbor::from_slice::<serde_json::Value>(results[0].as_ref().unwrap()).unwrap();
+        assert_eq!(is_record, json!(true));
+    }
+
+    #[tokio::test]
+    async fn binds_record_id_with_object_key_as_native_record() {
+        let db = test_db().await;
+        let param = serde_cbor::to_vec(&json!({
+            "table": "person",
+            "key": {"tenant": "demo", "shard": 1}
+        }))
+        .unwrap();
+
+        let results = query(
+            &db,
+            "RETURN type::is_record($id);".to_string(),
+            vec![("id".to_string(), param)],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 1);
+
+        let is_record =
+            serde_cbor::from_slice::<serde_json::Value>(results[0].as_ref().unwrap()).unwrap();
+        assert_eq!(is_record, json!(true));
+    }
 }

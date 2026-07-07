@@ -103,15 +103,24 @@ fn cbor_to_surreal(value: CborValue) -> Result<SurrealValue> {
     })
 }
 
+fn is_tagged_scalar_key(tag: &str) -> bool {
+    matches!(tag, UUID_TAG | DURATION_TAG | DECIMAL_TAG | REGEX_TAG)
+}
+
 fn map_to_surreal(values: BTreeMap<CborValue, CborValue>) -> Result<SurrealValue> {
     if values.len() == 1 {
-        let (key, value) = values.into_iter().next().expect("single entry map");
-        if let CborValue::Text(tag) = key {
-            return tagged_scalar_to_surreal(tag, value);
+        let mut iter = values.into_iter();
+        let (key, value) = iter.next().expect("single entry map");
+
+        if let CborValue::Text(tag) = &key
+            && is_tagged_scalar_key(tag)
+        {
+            return tagged_scalar_to_surreal(tag.clone(), value);
         }
+
         let mut object = SurrealObject::new();
         object.insert(map_key_to_string(key)?, cbor_to_surreal(value)?);
-        return Ok(SurrealValue::Object(object));
+        return maybe_record_id_object(object);
     }
 
     let mut object = SurrealObject::new();
@@ -119,6 +128,10 @@ fn map_to_surreal(values: BTreeMap<CborValue, CborValue>) -> Result<SurrealValue
         object.insert(map_key_to_string(key)?, cbor_to_surreal(value)?);
     }
 
+    maybe_record_id_object(object)
+}
+
+fn maybe_record_id_object(object: SurrealObject) -> Result<SurrealValue> {
     if let (Some(SurrealValue::String(table)), Some(key)) = (object.get("table"), object.get("key"))
         && let Ok(key) = SurrealRecordIdKey::from_value(key.clone())
     {
@@ -240,5 +253,88 @@ mod tests {
             }
             other => panic!("expected record id, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn decodes_record_id_with_string_key() {
+        let bytes = serde_cbor::to_vec(&json!({"table": "person", "key": "demo"})).unwrap();
+        let value = cbor_slice_to_surreal(&bytes).unwrap();
+
+        match value {
+            Value::RecordId(RecordId { table, key }) => {
+                assert_eq!(table.to_string(), "person");
+                assert!(matches!(key, RecordIdKey::String(s) if s == "demo"));
+            }
+            other => panic!("expected record id, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decodes_record_id_with_number_key() {
+        let bytes = serde_cbor::to_vec(&json!({"table": "person", "key": 42})).unwrap();
+        let value = cbor_slice_to_surreal(&bytes).unwrap();
+
+        match value {
+            Value::RecordId(RecordId { table, key }) => {
+                assert_eq!(table.to_string(), "person");
+                assert!(matches!(key, RecordIdKey::Number(42)));
+            }
+            other => panic!("expected record id, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decodes_record_id_with_array_key() {
+        let bytes =
+            serde_cbor::to_vec(&json!({"table": "person", "key": ["tenant-a", 42]})).unwrap();
+        let value = cbor_slice_to_surreal(&bytes).unwrap();
+
+        match value {
+            Value::RecordId(RecordId { table, key }) => {
+                assert_eq!(table.to_string(), "person");
+                assert!(matches!(key, RecordIdKey::Array(_)));
+            }
+            other => panic!("expected record id, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decodes_record_id_with_object_key() {
+        let bytes = serde_cbor::to_vec(&json!({
+            "table": "person",
+            "key": {"tenant": "demo", "shard": 1}
+        }))
+        .unwrap();
+        let value = cbor_slice_to_surreal(&bytes).unwrap();
+
+        match value {
+            Value::RecordId(RecordId { table, key }) => {
+                assert_eq!(table.to_string(), "person");
+                assert!(matches!(key, RecordIdKey::Object(_)));
+            }
+            other => panic!("expected record id, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decodes_single_entry_object_as_plain_object() {
+        let bytes = serde_cbor::to_vec(&json!({"shard": 1})).unwrap();
+        let value = cbor_slice_to_surreal(&bytes).unwrap();
+
+        assert!(
+            matches!(value, Value::Object(_)),
+            "expected plain object, got {value:?}"
+        );
+    }
+
+    #[test]
+    fn decodes_single_entry_object_with_non_reserved_tag_as_plain_object() {
+        let bytes = serde_cbor::to_vec(&json!({"custom_tag": "some_value"})).unwrap();
+        let value = cbor_slice_to_surreal(&bytes).unwrap();
+
+        assert!(
+            matches!(value, Value::Object(_)),
+            "expected plain object for non-reserved tag, got {value:?}"
+        );
     }
 }
