@@ -16,10 +16,10 @@ pub struct RecordId {
 }
 
 impl RecordId {
-    pub fn new(table: impl Into<String>, key: impl Into<String>) -> Self {
+    pub fn new(table: impl Into<String>, key: impl Into<RecordIdKey>) -> Self {
         Self {
             table: table.into(),
-            key: RecordIdKey::String(key.into()),
+            key: key.into(),
         }
     }
 }
@@ -37,6 +37,42 @@ pub enum RecordIdKey {
     Uuid(String),
     Array(Vec<RecordIdValue>),
     Object(HashMap<String, RecordIdValue>),
+}
+
+impl RecordIdKey {
+    pub fn number(value: i64) -> Self {
+        Self::Number(value)
+    }
+
+    pub fn string(value: impl Into<String>) -> Self {
+        Self::String(value.into())
+    }
+
+    pub fn uuid(value: impl Into<String>) -> Self {
+        Self::Uuid(value.into())
+    }
+
+    pub fn array<I>(values: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: Into<RecordIdValue>,
+    {
+        Self::Array(values.into_iter().map(Into::into).collect())
+    }
+
+    pub fn object<I, K, V>(values: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<RecordIdValue>,
+    {
+        Self::Object(
+            values
+                .into_iter()
+                .map(|(key, value)| (key.into(), value.into()))
+                .collect(),
+        )
+    }
 }
 
 impl Hash for RecordIdKey {
@@ -115,6 +151,92 @@ pub enum RecordIdValue {
 }
 
 impl Eq for RecordIdValue {}
+
+impl RecordIdValue {
+    pub fn null() -> Self {
+        Self::Null
+    }
+
+    pub fn bool(value: bool) -> Self {
+        Self::Bool(value)
+    }
+
+    pub fn number(value: i64) -> Self {
+        Self::Number(value)
+    }
+
+    pub fn float(value: f64) -> Self {
+        Self::Float(value)
+    }
+
+    pub fn string(value: impl Into<String>) -> Self {
+        Self::String(value.into())
+    }
+
+    pub fn array<I>(values: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: Into<RecordIdValue>,
+    {
+        Self::Array(values.into_iter().map(Into::into).collect())
+    }
+
+    pub fn object<I, K, V>(values: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<RecordIdValue>,
+    {
+        Self::Object(
+            values
+                .into_iter()
+                .map(|(key, value)| (key.into(), value.into()))
+                .collect(),
+        )
+    }
+}
+
+impl From<bool> for RecordIdValue {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl From<i64> for RecordIdValue {
+    fn from(value: i64) -> Self {
+        Self::Number(value)
+    }
+}
+
+impl From<f64> for RecordIdValue {
+    fn from(value: f64) -> Self {
+        Self::Float(value)
+    }
+}
+
+impl From<String> for RecordIdValue {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl From<&str> for RecordIdValue {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_string())
+    }
+}
+
+impl From<Vec<RecordIdValue>> for RecordIdValue {
+    fn from(value: Vec<RecordIdValue>) -> Self {
+        Self::Array(value)
+    }
+}
+
+impl From<HashMap<String, RecordIdValue>> for RecordIdValue {
+    fn from(value: HashMap<String, RecordIdValue>) -> Self {
+        Self::Object(value)
+    }
+}
 
 impl Hash for RecordIdValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -436,11 +558,17 @@ impl From<HashMap<String, RecordIdValue>> for RecordIdKey {
     }
 }
 
+impl From<crate::types::Uuid> for RecordIdKey {
+    fn from(value: crate::types::Uuid) -> Self {
+        Self::Uuid(value.into_inner())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
-    use super::RecordIdKey;
+    use super::{RecordId, RecordIdKey, RecordIdValue};
 
     #[test]
     fn serializes_uuid_keys_as_tagged_maps() {
@@ -452,6 +580,144 @@ mod tests {
         assert_eq!(
             value,
             json!({"$surrealdb::uuid": "018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"})
+        );
+    }
+
+    #[test]
+    fn record_id_new_accepts_string_key() {
+        let value = serde_json::to_value(RecordId::new("person", "demo")).unwrap();
+        assert_eq!(value, json!({"table": "person", "key": "demo"}));
+    }
+
+    #[test]
+    fn record_id_new_accepts_number_key() {
+        let value = serde_json::to_value(RecordId::new("person", 42_i64)).unwrap();
+        assert_eq!(value, json!({"table": "person", "key": 42}));
+    }
+
+    #[test]
+    fn record_id_new_accepts_uuid_key() {
+        let value = serde_json::to_value(RecordId::new(
+            "person",
+            RecordIdKey::uuid("018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"),
+        ))
+        .unwrap();
+        assert_eq!(
+            value,
+            json!({
+                "table": "person",
+                "key": {"$surrealdb::uuid": "018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"}
+            })
+        );
+    }
+
+    #[test]
+    fn record_id_new_accepts_array_key() {
+        let value = serde_json::to_value(RecordId::new(
+            "person",
+            RecordIdKey::array([RecordIdValue::string("tenant-a"), RecordIdValue::number(42)]),
+        ))
+        .unwrap();
+        assert_eq!(value, json!({"table": "person", "key": ["tenant-a", 42]}));
+    }
+
+    #[test]
+    fn record_id_new_accepts_object_key() {
+        let value = serde_json::to_value(RecordId::new(
+            "person",
+            RecordIdKey::object([
+                ("tenant", RecordIdValue::string("demo")),
+                ("shard", RecordIdValue::number(1)),
+            ]),
+        ))
+        .unwrap();
+        assert_eq!(
+            value,
+            json!({
+                "table": "person",
+                "key": {"tenant": "demo", "shard": 1}
+            })
+        );
+    }
+
+    #[test]
+    fn deserializes_canonical_record_id_with_string_key() {
+        let value: RecordId =
+            serde_json::from_value(json!({"table": "person", "key": "demo"})).unwrap();
+        assert_eq!(value.table, "person");
+        assert_eq!(value.key, RecordIdKey::String("demo".to_string()));
+    }
+
+    #[test]
+    fn deserializes_canonical_record_id_with_number_key() {
+        let value: RecordId =
+            serde_json::from_value(json!({"table": "person", "key": 42})).unwrap();
+        assert_eq!(value.table, "person");
+        assert_eq!(value.key, RecordIdKey::Number(42));
+    }
+
+    #[test]
+    fn deserializes_canonical_record_id_with_uuid_key() {
+        let value: RecordId = serde_json::from_value(json!({
+            "table": "person",
+            "key": {"$surrealdb::uuid": "018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"}
+        }))
+        .unwrap();
+        assert_eq!(value.table, "person");
+        assert_eq!(
+            value.key,
+            RecordIdKey::Uuid("018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d".to_string())
+        );
+    }
+
+    #[test]
+    fn deserializes_canonical_record_id_with_array_key() {
+        let value: RecordId = serde_json::from_value(json!({
+            "table": "person",
+            "key": ["tenant-a", 42]
+        }))
+        .unwrap();
+        assert_eq!(value.table, "person");
+        assert_eq!(
+            value.key,
+            RecordIdKey::Array(vec![
+                RecordIdValue::String("tenant-a".to_string()),
+                RecordIdValue::Number(42),
+            ])
+        );
+    }
+
+    #[test]
+    fn deserializes_canonical_record_id_with_object_key() {
+        let value: RecordId = serde_json::from_value(json!({
+            "table": "person",
+            "key": {"tenant": "demo", "shard": 1}
+        }))
+        .unwrap();
+        assert_eq!(value.table, "person");
+        assert!(matches!(value.key, RecordIdKey::Object(_)));
+    }
+
+    #[test]
+    fn deserializes_legacy_record_id() {
+        let value: RecordId =
+            serde_json::from_value(json!({"tb": "person", "id": "demo"})).unwrap();
+        assert_eq!(value.table, "person");
+        assert_eq!(value.key, RecordIdKey::String("demo".to_string()));
+    }
+
+    #[test]
+    fn record_id_value_from_impls() {
+        assert_eq!(RecordIdValue::from(true), RecordIdValue::Bool(true));
+        assert_eq!(RecordIdValue::from(42_i64), RecordIdValue::Number(42));
+        assert_eq!(RecordIdValue::from(3.14_f64), RecordIdValue::Float(3.14));
+        assert_eq!(
+            RecordIdValue::from("hello"),
+            RecordIdValue::String("hello".to_string())
+        );
+        assert_eq!(
+            RecordIdValue::from("hello".to_string()),
+            RecordIdValue::String("hello".to_string())
         );
     }
 }

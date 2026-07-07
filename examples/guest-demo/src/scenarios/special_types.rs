@@ -2,7 +2,9 @@ use anyhow::{Context, Result, anyhow, ensure};
 use chrono::{TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use surrealdb_component_sdk::{Bytes, Datetime, Decimal, Geometry, RecordId, Regex, Uuid, query};
+use surrealdb_component_sdk::{
+    Bytes, Datetime, Decimal, Geometry, RecordId, RecordIdKey, RecordIdValue, Regex, Uuid, query,
+};
 
 type SurrealDuration = surrealdb_component_sdk::Duration;
 
@@ -74,38 +76,18 @@ fn expected_document() -> Result<SpecialTypesDocument> {
             "coordinates": [4.895168, 52.370216]
         })),
         string_record: RecordId::new("person", "demo"),
-        number_record: parse_record_id(json!({
-            "table": "person",
-            "key": 42,
-        }))?,
-        uuid_record: parse_record_id(json!({
-            "table": "person",
-            "key": {
-                "$surrealdb::uuid": "018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"
-            },
-        }))?,
-        object_record: parse_record_id(json!({
-            "table": "person",
-            "key": {
-                "region": "eu",
-                "tenant": "demo",
-                "active": true,
-            },
-        }))?,
-    })
-}
-
-fn parse_record_id(value: serde_json::Value) -> Result<RecordId> {
-    let record_id: RecordId = serde_json::from_value(value)?;
-    ensure!(
-        matches!(
-            record_id.key,
-            surrealdb_component_sdk::RecordIdKey::String(_)
-                | surrealdb_component_sdk::RecordIdKey::Number(_)
-                | surrealdb_component_sdk::RecordIdKey::Uuid(_)
-                | surrealdb_component_sdk::RecordIdKey::Object(_)
+        number_record: RecordId::new("person", 42_i64),
+        uuid_record: RecordId::new(
+            "person",
+            RecordIdKey::uuid("018f6b5b-f4b4-7f28-8b34-9b46ef4f2f4d"),
         ),
-        "unexpected record id key type"
-    );
-    Ok(record_id)
+        object_record: RecordId::new(
+            "person",
+            RecordIdKey::object([
+                ("region", RecordIdValue::string("eu")),
+                ("tenant", RecordIdValue::string("demo")),
+                ("active", RecordIdValue::bool(true)),
+            ]),
+        ),
+    })
 }
