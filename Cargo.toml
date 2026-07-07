@@ -1,41 +1,51 @@
 [workspace]
-members = [
-    "crates/surrealdb-component-sdk",
-    "crates/surrealdb-host-adapter",
-    "examples/guest-demo",
-    "examples/host-wasmtime",
-]
 resolver = "2"
+members = [
+  "crates/surrealdb-component-sdk",
+  "crates/surrealdb-host-adapter",
+  "examples/guest-demo",
+  "examples/host-wasmtime",
+]
 
 [workspace.package]
 edition = "2024"
-license = "Apache-2.0"
 repository = "https://github.com/Seamlezz/surrealdb-wasi-component"
+license = "Apache-2.0"
 
 [workspace.dependencies]
 anyhow = "1"
-chrono = { version = "0.4", default-features = false, features = [
+chrono = {
+  version = "0.4",
+  default-features = false,
+  features = [
     "clock",
     "serde",
-] }
+  ]
+}
 futures-util = "0.3"
-prost-types = "0.14"
 serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
 serde_json = "1"
-surrealdb = { version = "3", default-features = false, features = [
+surrealdb = {
+  version = "3",
+  default-features = false,
+  features = [
     "kv-mem",
     "protocol-http",
     "rustls",
-] }
+  ]
+}
 surrealdb-types = "3"
-wasmtime = { version = "46", features = [
-    "component-model",
-    "async",
-    "component-model-async",
-] }
-wasmtime-wasi = { version = "46", features = ["p2", "p3"] }
-wasip3 = "0.7"
-wit-bindgen = "0.58"
-tokio = { version = "1", features = ["sync"] }
 thiserror = "2"
+tokio = { version = "1", features = ["sync"] }
+wasip3 = "0.7"
+wasmtime = {
+  version = "46",
+  features = [
+    "async",
+    "component-model",
+    "component-model-async",
+  ]
+}
+wasmtime-wasi = { version = "46", features = ["p2", "p3"] }
+wit-bindgen = "0.58"

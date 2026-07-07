@@ -40,18 +40,15 @@ impl From<DateTime<Utc>> for Datetime {
     }
 }
 
-impl From<Datetime> for prost_types::Timestamp {
+impl From<Datetime> for std::time::SystemTime {
     fn from(value: Datetime) -> Self {
-        Self {
-            seconds: value.0.timestamp(),
-            nanos: value.0.timestamp_subsec_nanos() as i32,
-        }
+        value.0.into()
     }
 }
 
-impl From<Datetime> for Option<prost_types::Timestamp> {
-    fn from(value: Datetime) -> Self {
-        Some(value.into())
+impl From<std::time::SystemTime> for Datetime {
+    fn from(value: std::time::SystemTime) -> Self {
+        Self(DateTime::from(value))
     }
 }
 

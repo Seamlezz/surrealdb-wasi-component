@@ -1,13 +1,13 @@
 [package]
 name = "surrealdb-component-sdk"
-version = "0.6.0"
+version = "0.6.1"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Rust SDK for building SurrealDB WASI components"
 authors = ["Seamlezz"]
 documentation = "https://github.com/Seamlezz/surrealdb-wasi-component"
-keywords = ["surrealdb", "wasi", "component"]
+keywords = ["component", "surrealdb", "wasi"]
 categories = ["api-bindings"]
 
 [lib]
@@ -16,9 +16,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
-prost-types.workspace = true
 serde.workspace = true
 serde_cbor.workspace = true
 serde_json.workspace = true
-wit-bindgen.workspace = true
 wasip3.workspace = true
+wit-bindgen.workspace = true
