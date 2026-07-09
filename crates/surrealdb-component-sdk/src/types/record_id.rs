@@ -9,6 +9,45 @@ use crate::types::tagged_scalar::serialize_tagged_scalar;
 
 const UUID_TAG: &str = "$surrealdb::uuid";
 
+// =============================================================================
+// Display helpers
+// =============================================================================
+
+/// Returns true if the string is a "simple" identifier that can be displayed
+/// without backtick quoting. Simple means: only alphanumeric + underscore,
+/// and not parseable as an i64 (to avoid ambiguity with numeric IDs).
+fn is_simple_id(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    if !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return false;
+    }
+    s.parse::<i64>().is_err()
+}
+
+/// Format a string as a record ID key: bare if simple, backtick-quoted otherwise.
+fn fmt_string_key(s: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    if is_simple_id(s) {
+        write!(f, "{s}")
+    } else {
+        write!(f, "`{s}`")
+    }
+}
+
+/// Format a string as a record ID value: single-quoted with internal single quotes escaped.
+fn fmt_string_value(s: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "'")?;
+    for c in s.chars() {
+        if c == '\'' {
+            write!(f, "\\'")?;
+        } else {
+            write!(f, "{c}")?;
+        }
+    }
+    write!(f, "'")
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct RecordId {
     pub table: String,
@@ -26,7 +65,9 @@ impl RecordId {
 
 impl fmt::Display for RecordId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.table, self.key)
+        fmt_string_key(&self.table, f)?;
+        write!(f, ":")?;
+        fmt::Display::fmt(&self.key, f)
     }
 }
 
@@ -112,8 +153,8 @@ impl fmt::Display for RecordIdKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Number(value) => write!(f, "{value}"),
-            Self::String(value) => write!(f, "{value}"),
-            Self::Uuid(value) => write!(f, "{value}"),
+            Self::String(value) => fmt_string_key(value, f),
+            Self::Uuid(value) => write!(f, "u'{value}'"),
             Self::Array(values) => {
                 write!(f, "[")?;
                 for (index, item) in values.iter().enumerate() {
@@ -130,7 +171,8 @@ impl fmt::Display for RecordIdKey {
                     if index > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "\"{key}\": {value}")?;
+                    fmt_string_key(key, f)?;
+                    write!(f, ": {value}")?;
                 }
                 write!(f, "}}")
             }
@@ -261,11 +303,11 @@ impl Hash for RecordIdValue {
 impl fmt::Display for RecordIdValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Null => write!(f, "null"),
+            Self::Null => write!(f, "NONE"),
             Self::Bool(value) => write!(f, "{value}"),
             Self::Number(value) => write!(f, "{value}"),
-            Self::Float(value) => write!(f, "{value}"),
-            Self::String(value) => write!(f, "\"{value}\""),
+            Self::Float(value) => write!(f, "{value}f"),
+            Self::String(value) => fmt_string_value(value, f),
             Self::Array(values) => {
                 write!(f, "[")?;
                 for (index, item) in values.iter().enumerate() {
@@ -282,7 +324,8 @@ impl fmt::Display for RecordIdValue {
                     if index > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "\"{key}\": {value}")?;
+                    fmt_string_key(key, f)?;
+                    write!(f, ": {value}")?;
                 }
                 write!(f, "}}")
             }
