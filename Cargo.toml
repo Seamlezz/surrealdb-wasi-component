@@ -23,6 +23,7 @@ chrono = {
   ]
 }
 futures-util = "0.3"
+otel-wasi = { git = "https://github.com/Seamlezz/otel-wasi", rev = "6daaf6880b332f433c6d83a6c7b376869c7535bf" }
 serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
 serde_json = "1"

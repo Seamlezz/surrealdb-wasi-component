@@ -4,6 +4,7 @@ use anyhow::{Context, Result, anyhow};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+use crate::bindings::current_parent_context;
 use crate::bindings::seamlezz::surrealdb::call;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,7 +75,7 @@ impl LiveSubscription {
     }
 
     pub async fn cancel(self) -> Result<()> {
-        call::cancel(self.subscription_id)
+        call::cancel(current_parent_context(), self.subscription_id)
             .await
             .map_err(|error| anyhow!(error))?;
 
@@ -114,8 +115,12 @@ impl<'a> LiveQuery<'a> {
             return Err(error);
         }
 
-        let (subscription_id, stream) =
-            call::subscribe(self.query_str.to_string(), self.params).await;
+        let (subscription_id, stream) = call::subscribe(
+            current_parent_context(),
+            self.query_str.to_string(),
+            self.params,
+        )
+        .await;
         Ok(LiveSubscription {
             subscription_id,
             stream,

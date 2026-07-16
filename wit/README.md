@@ -1,6 +1,6 @@
 # SurrealDB WIT Package
 
-This directory defines the `seamlezz:surrealdb@0.2.0` package.
+This directory defines the `seamlezz:surrealdb@0.3.0` package.
 
 The package exposes one async interface, `call`, with three functions:
 

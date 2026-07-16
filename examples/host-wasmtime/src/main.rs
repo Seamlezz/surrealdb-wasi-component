@@ -177,11 +177,14 @@ impl<T> StreamProducer<T> for LiveEventProducer {
     }
 }
 
+impl bindings::wasmcloud::observability::propagation::Host for SurrealHostAdapter {}
+
 impl<T: Send> bindings::seamlezz::surrealdb::call::HostWithStore<T>
     for HasSelf<SurrealHostAdapter>
 {
     async fn query(
         accessor: &Accessor<T, Self>,
+        _parent_context: Option<bindings::wasmcloud::observability::propagation::TraceContext>,
         query: String,
         params: Vec<(String, Vec<u8>)>,
     ) -> wasmtime::Result<Vec<Result<Vec<u8>, String>>> {
@@ -209,6 +212,7 @@ impl<T: Send> bindings::seamlezz::surrealdb::call::HostWithStore<T>
 
     async fn subscribe(
         accessor: &Accessor<T, Self>,
+        _parent_context: Option<bindings::wasmcloud::observability::propagation::TraceContext>,
         query: String,
         params: Vec<(String, Vec<u8>)>,
     ) -> wasmtime::Result<(u64, StreamReader<BindingLiveEvent>)> {
@@ -351,6 +355,7 @@ impl<T: Send> bindings::seamlezz::surrealdb::call::HostWithStore<T>
 
     async fn cancel(
         accessor: &Accessor<T, Self>,
+        _parent_context: Option<bindings::wasmcloud::observability::propagation::TraceContext>,
         subscription_id: u64,
     ) -> wasmtime::Result<Result<(), String>> {
         println!(

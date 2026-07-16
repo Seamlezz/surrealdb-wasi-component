@@ -8,7 +8,7 @@ This workspace provides the pieces needed to let a WASI component run SurrealDB 
 
 1. `crates/surrealdb-component-sdk` gives guest components a Rust API for query execution.
 2. `crates/surrealdb-host-adapter` connects the host runtime to SurrealDB.
-3. `wit/` defines the `seamlezz:surrealdb@0.2.0` interface contract.
+3. `wit/` defines the `seamlezz:surrealdb@0.3.0` interface contract.
 4. `examples/guest-demo` shows the guest side query and live query flow.
 
 ## Workspace Layout

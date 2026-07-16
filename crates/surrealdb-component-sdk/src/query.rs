@@ -3,6 +3,7 @@ use std::any::type_name;
 use anyhow::{Context, Result};
 use serde::Serialize;
 
+use crate::bindings::current_parent_context;
 use crate::bindings::seamlezz::surrealdb::call;
 use crate::result::QueryResultHolder;
 
@@ -38,7 +39,12 @@ impl<'a> Query<'a> {
             return Err(error);
         }
 
-        let results = call::query(self.query_str.to_string(), self.params).await;
+        let results = call::query(
+            current_parent_context(),
+            self.query_str.to_string(),
+            self.params,
+        )
+        .await;
         Ok(QueryResultHolder::new(results))
     }
 }
