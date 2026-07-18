@@ -1,19 +1,14 @@
-use std::any::type_name;
-
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use serde::de::DeserializeOwned;
+
+use crate::decoder;
 
 pub trait SingleQueryResultExtractor: Sized {
     fn from_bytes(bytes: &[u8]) -> Result<Self>;
 }
 
 fn parse<D: DeserializeOwned>(bytes: &[u8]) -> Result<D> {
-    serde_cbor::from_slice::<D>(bytes).with_context(|| {
-        format!(
-            "failed to parse query result into type {}",
-            type_name::<D>()
-        )
-    })
+    decoder::decode(bytes, "failed to parse query result")
 }
 
 impl<D: DeserializeOwned> SingleQueryResultExtractor for Vec<D> {

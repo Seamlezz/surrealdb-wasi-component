@@ -1,4 +1,5 @@
 mod bindings;
+mod decoder;
 mod live;
 mod query;
 mod result;

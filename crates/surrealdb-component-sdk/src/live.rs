@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 
 use crate::bindings::current_parent_context;
 use crate::bindings::seamlezz::surrealdb::call;
+use crate::decoder;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LiveAction {
@@ -25,12 +26,7 @@ pub struct LiveEvent {
 
 impl LiveEvent {
     pub fn parse<D: DeserializeOwned>(&self) -> Result<D> {
-        serde_cbor::from_slice::<D>(self.data.as_slice()).with_context(|| {
-            format!(
-                "failed to parse live event data into type {}",
-                type_name::<D>()
-            )
-        })
+        decoder::decode(&self.data, "failed to parse live event data")
     }
 }
 
