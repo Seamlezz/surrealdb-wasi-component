@@ -61,6 +61,10 @@ impl QueryResultHolder {
             return Err(anyhow!("result index {index} out of bounds"));
         };
 
+        if let Some(error) = self.find_user_error() {
+            return Ok(Err(error));
+        }
+
         match result {
             Ok(bytes) => Ok(Ok(T::from_bytes(bytes)?)),
             Err(error) => Ok(Err(error.clone())),
@@ -83,6 +87,10 @@ impl QueryResultHolder {
             return Err(anyhow!("result index {index} out of bounds"));
         };
 
+        if let Some(error) = self.find_user_error() {
+            return Ok(Err(error));
+        }
+
         match result {
             Ok(bytes) => Ok(Ok(parse(bytes)?)),
             Err(error) => Ok(Err(error.clone())),
@@ -96,6 +104,8 @@ impl QueryResultHolder {
             .filter_map(|result| result.as_ref().err().cloned())
             .filter(|error| {
                 !error.contains("The query was not executed due to a failed transaction")
+                    && !error.contains("The query was not executed due to a cancelled transaction")
+                    && !error.contains("the transaction was aborted due to a prior error")
             })
             .collect();
 
@@ -104,5 +114,61 @@ impl QueryResultHolder {
         }
 
         Some(errors.join("; "))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::QueryResultHolder;
+
+    const FAILED_TRANSACTION: &str = "The query was not executed due to a failed transaction";
+    const CANCELLED_TRANSACTION: &str = "The query was not executed due to a cancelled transaction";
+
+    #[test]
+    fn parse_result_returns_meaningful_transaction_errors() {
+        let results = QueryResultHolder::new(vec![
+            Ok(serde_cbor::to_vec(&serde_cbor::Value::Null).unwrap()),
+            Err(FAILED_TRANSACTION.into()),
+            Err("Specify a database to use".into()),
+            Err(CANCELLED_TRANSACTION.into()),
+            Err("Another statement error".into()),
+        ]);
+
+        let error = results
+            .parse_result::<serde_cbor::Value>(0)
+            .unwrap()
+            .unwrap_err();
+
+        assert_eq!(error, "Specify a database to use; Another statement error");
+    }
+
+    #[test]
+    fn take_result_returns_meaningful_transaction_errors() {
+        let results = QueryResultHolder::new(vec![
+            Ok(serde_cbor::to_vec(&Vec::<i32>::new()).unwrap()),
+            Err(CANCELLED_TRANSACTION.into()),
+            Err("Specify a database to use".into()),
+        ]);
+
+        let error = results.take_result::<Option<i32>>(0).unwrap().unwrap_err();
+
+        assert_eq!(error, "Specify a database to use");
+    }
+
+    #[test]
+    fn result_methods_preserve_transaction_error_without_meaningful_error() {
+        let results = QueryResultHolder::new(vec![
+            Err(FAILED_TRANSACTION.into()),
+            Err(CANCELLED_TRANSACTION.into()),
+        ]);
+
+        let parse_error = results
+            .parse_result::<serde_cbor::Value>(0)
+            .unwrap()
+            .unwrap_err();
+        let take_error = results.take_result::<Option<i32>>(1).unwrap().unwrap_err();
+
+        assert_eq!(parse_error, FAILED_TRANSACTION);
+        assert_eq!(take_error, CANCELLED_TRANSACTION);
     }
 }
