@@ -1341,7 +1341,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2759,7 +2759,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2928,7 +2928,7 @@ dependencies = [
 [[package]]
 name = "opentelemetry-wasi"
 version = "0.27.0"
-source = "git+https://github.com/gabber235/opentelemetry-wasi?rev=1284d7ad00f536784622efc79feb1c1874dce922#1284d7ad00f536784622efc79feb1c1874dce922"
+source = "git+https://github.com/gabber235/opentelemetry-wasi?rev=27b2a0242bb480e2bb0b01de20a05e462afdd741#27b2a0242bb480e2bb0b01de20a05e462afdd741"
 dependencies = [
  "anyhow",
  "base64",
@@ -2960,7 +2960,7 @@ dependencies = [
 [[package]]
 name = "otel-wasi"
 version = "0.2.1"
-source = "git+https://github.com/Seamlezz/otel-wasi?rev=6daaf6880b332f433c6d83a6c7b376869c7535bf#6daaf6880b332f433c6d83a6c7b376869c7535bf"
+source = "git+https://github.com/Seamlezz/otel-wasi?rev=7c7537a33d216feb84835e111405a90460ec6297#7c7537a33d216feb84835e111405a90460ec6297"
 dependencies = [
  "opentelemetry",
  "opentelemetry-wasi",
@@ -2974,7 +2974,7 @@ dependencies = [
 [[package]]
 name = "otel-wasi-macros"
 version = "0.2.1"
-source = "git+https://github.com/Seamlezz/otel-wasi?rev=6daaf6880b332f433c6d83a6c7b376869c7535bf#6daaf6880b332f433c6d83a6c7b376869c7535bf"
+source = "git+https://github.com/Seamlezz/otel-wasi?rev=7c7537a33d216feb84835e111405a90460ec6297#7c7537a33d216feb84835e111405a90460ec6297"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3469,7 +3469,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3995,7 +3995,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4064,7 +4064,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4186,7 +4186,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b55fb86dfd3a2f5f76ea78310a88f96c4ea21a3031f8d212443d56123fd0521"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4819,7 +4819,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6102,7 +6102,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
