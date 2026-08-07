@@ -23,6 +23,7 @@ chrono = {
   ]
 }
 futures-util = "0.3"
+futures = "0.3"
 otel-wasi = { git = "https://github.com/Seamlezz/otel-wasi", rev = "1035d89de8ffca498df516903f4e22b8f9886dab" }
 serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
@@ -50,3 +51,4 @@ wasmtime = {
 }
 wasmtime-wasi = { version = "46", features = ["p2", "p3"] }
 wit-bindgen = "0.58"
+wstd = "0.6"

@@ -121,6 +121,8 @@ impl WasiView for SurrealHostAdapter {
 
 type BindingLiveAction = bindings::seamlezz::surrealdb::call::LiveAction;
 type BindingLiveEvent = bindings::seamlezz::surrealdb::call::LiveEvent;
+type BindingQueryFailure = bindings::seamlezz::surrealdb::call::QueryFailure;
+type BindingStatementError = bindings::seamlezz::surrealdb::call::StatementError;
 
 fn map_live_action(action: surrealdb_host_adapter::LiveAction) -> BindingLiveAction {
     match action {
@@ -137,6 +139,25 @@ fn to_binding_live_event(event: surrealdb_host_adapter::LiveEvent) -> BindingLiv
         query_id: event.query_id,
         action: map_live_action(event.action),
         data: event.data,
+    }
+}
+
+fn to_binding_statement_error(
+    error: surrealdb_host_adapter::StatementError,
+) -> BindingStatementError {
+    match error {
+        surrealdb_host_adapter::StatementError::Domain(message) => {
+            BindingStatementError::Domain(message)
+        }
+        surrealdb_host_adapter::StatementError::RetryableConflict(message) => {
+            BindingStatementError::RetryableConflict(message)
+        }
+        surrealdb_host_adapter::StatementError::NotExecuted(message) => {
+            BindingStatementError::NotExecuted(message)
+        }
+        surrealdb_host_adapter::StatementError::Failure(message) => {
+            BindingStatementError::Failure(message)
+        }
     }
 }
 
@@ -187,7 +208,8 @@ impl<T: Send> bindings::seamlezz::surrealdb::call::HostWithStore<T>
         _parent_context: Option<bindings::wasmcloud::observability::propagation::TraceContext>,
         query: String,
         params: Vec<(String, Vec<u8>)>,
-    ) -> wasmtime::Result<Vec<Result<Vec<u8>, String>>> {
+    ) -> wasmtime::Result<Result<Vec<Result<Vec<u8>, BindingStatementError>>, BindingQueryFailure>>
+    {
         println!(
             "wasi host query begin. query={}, params_len={}",
             query,
@@ -205,9 +227,17 @@ impl<T: Send> bindings::seamlezz::surrealdb::call::HostWithStore<T>
         println!("wasi host query db lock acquired");
         let result = surrealdb_host_adapter::query(&db, query, params)
             .await
-            .map_err(wasmtime::Error::new);
+            .map(|results| {
+                results
+                    .into_iter()
+                    .map(|result| result.map_err(to_binding_statement_error))
+                    .collect()
+            })
+            .map_err(|error| BindingQueryFailure {
+                message: error.to_string(),
+            });
         println!("wasi host query adapter returned. ok={}", result.is_ok());
-        result
+        Ok(result)
     }
 
     async fn subscribe(

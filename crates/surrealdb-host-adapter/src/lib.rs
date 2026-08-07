@@ -3,7 +3,7 @@ mod manager;
 
 use convert::{cbor_slice_to_surreal, ordered_params, surreal_to_cbor_bytes};
 use surrealdb::{Notification, Surreal, engine::any::Any, method::QueryStream};
-use surrealdb_types::{Action, Value};
+use surrealdb_types::{Action, ErrorDetails, QueryError as SurrealQueryError, Value};
 use thiserror::Error;
 
 pub use manager::{SubscriptionManager, SubscriptionTask};
@@ -18,6 +18,14 @@ pub enum QueryError {
     },
     #[error("surreal query failed")]
     QueryExecution(#[source] surrealdb::Error),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StatementError {
+    Domain(String),
+    RetryableConflict(String),
+    NotExecuted(String),
+    Failure(String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -70,7 +78,7 @@ pub async fn query(
     db: &Surreal<Any>,
     query: String,
     params: Vec<(String, Vec<u8>)>,
-) -> Result<Vec<Result<Vec<u8>, String>>, QueryError> {
+) -> Result<Vec<Result<Vec<u8>, StatementError>>, QueryError> {
     let mut query_builder = db.query(&query);
     let decoded = decode_params(params, |key, source| QueryError::ParamDecode {
         key,
@@ -87,13 +95,32 @@ pub async fn query(
         match response.take::<Value>(index) {
             Ok(value) => match surreal_to_cbor_bytes(value) {
                 Ok(bytes) => results.push(Ok(bytes)),
-                Err(error) => results.push(Err(error.to_string())),
+                Err(error) => results.push(Err(StatementError::Failure(error.to_string()))),
             },
-            Err(error) => results.push(Err(error.to_string())),
+            Err(error) => results.push(Err(statement_error(error))),
         }
     }
 
     Ok(results)
+}
+
+fn statement_error(error: surrealdb::Error) -> StatementError {
+    let message = error.message().to_string();
+    match error.details() {
+        ErrorDetails::Thrown => StatementError::Domain(
+            message
+                .strip_prefix("An error occurred: ")
+                .unwrap_or(&message)
+                .to_string(),
+        ),
+        ErrorDetails::Query(Some(SurrealQueryError::TransactionConflict)) => {
+            StatementError::RetryableConflict(message)
+        }
+        ErrorDetails::Query(Some(
+            SurrealQueryError::NotExecuted | SurrealQueryError::Cancelled,
+        )) => StatementError::NotExecuted(message),
+        _ => StatementError::Failure(message),
+    }
 }
 
 pub async fn subscribe(
@@ -145,8 +172,9 @@ pub fn notification_to_live_event(
 mod tests {
     use serde_json::json;
     use surrealdb::{Surreal, engine::any::Any};
+    use surrealdb_types::{Error, QueryError as SurrealQueryError};
 
-    use super::query;
+    use super::{StatementError, query, statement_error};
 
     async fn test_db() -> Surreal<Any> {
         let db: Surreal<Any> = Surreal::init();
@@ -282,5 +310,31 @@ mod tests {
         let is_record =
             serde_cbor::from_slice::<serde_json::Value>(results[0].as_ref().unwrap()).unwrap();
         assert_eq!(is_record, json!(true));
+    }
+
+    #[test]
+    fn preserves_structured_transaction_conflicts() {
+        let error = Error::query(
+            "Transaction conflict".into(),
+            SurrealQueryError::TransactionConflict,
+        );
+
+        assert_eq!(
+            statement_error(error),
+            StatementError::RetryableConflict("Transaction conflict".into())
+        );
+    }
+
+    #[tokio::test]
+    async fn preserves_thrown_domain_errors() {
+        let db = test_db().await;
+        let results = query(&db, "THROW 'invalid-token'".into(), Vec::new())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            results,
+            vec![Err(StatementError::Domain("invalid-token".into()))]
+        );
     }
 }
