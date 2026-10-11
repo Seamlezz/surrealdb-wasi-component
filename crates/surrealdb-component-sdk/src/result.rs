@@ -217,12 +217,16 @@ mod tests {
             Err(StatementError::NotExecuted("transaction aborted".into())),
         ]);
 
+        let error = response.transaction::<Value>(1).unwrap_err();
+        let reported = otel_wasi::Error::new("database-transaction-failed", &error);
+        assert!(otel_wasi::WasiError::message(&reported).contains("database unavailable"));
+
         assert!(matches!(
-            response.transaction::<Value>(1),
-            Err(QueryResultError::Statement {
+            error,
+            QueryResultError::Statement {
                 index: 0,
                 source: StatementError::Failure(message),
-            }) if message == "database unavailable"
+            } if message == "database unavailable"
         ));
     }
 }
