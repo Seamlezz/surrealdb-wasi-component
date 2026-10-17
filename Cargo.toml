@@ -40,7 +40,7 @@ surrealdb = {
 surrealdb-types = "3"
 thiserror = "2"
 tokio = { version = "1", features = ["sync"] }
-wasip3 = "0.7"
+wasip3 = "0.9"
 wasmtime = {
   version = "46",
   features = [
@@ -50,5 +50,5 @@ wasmtime = {
   ]
 }
 wasmtime-wasi = { version = "46", features = ["p2", "p3"] }
-wit-bindgen = "0.58"
+wit-bindgen = "0.62"
 wstd = "0.6"
