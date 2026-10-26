@@ -69,8 +69,11 @@ impl<'a> Query<'a> {
                     Ok(QueryResponse::new(results))
                 }
             },
+            // The guest's own clock: an export runs on the component model async runtime, where a
+            // wstd timer has no reactor to drive it and never wakes.
             |duration| async move {
-                wstd::time::Timer::after(duration.into()).wait().await;
+                let nanoseconds = u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX);
+                wasip3::clocks::monotonic_clock::wait_for(nanoseconds).await;
             },
             QueryResponse::retryable_conflict,
         )
