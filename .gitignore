@@ -28,3 +28,9 @@ target
 
 .DS_Store
 /docs
+/wit/deps
+
+# devenv
+.devenv/
+.devenv.flake.nix
+devenv.lock.bak

@@ -31,25 +31,25 @@ This workspace provides the pieces needed to let a WASI component run SurrealDB 
 
 ### Prerequisites
 
-1. Rust toolchain with `wasm32-wasip2` target installed.
-2. `task` command available for workflow commands.
-3. `wkg` command available for WIT fetch and release packaging.
+[devenv](https://devenv.sh). `devenv shell` provides Rust with the `wasm32-wasip2` target and `wkg`. CI runs the same commands.
 
 ### Common Commands
 
 ```bash
-task wit:fetch
-task fmt
-task lint
-task test
-task test:examples
-task build:host
-task build:sdk
-task build:demo
-task ci
+devenv shell -- wit-fetch
+devenv shell -- format
+devenv shell -- format-check
+devenv shell -- lint
+devenv shell -- tests
+devenv shell -- test-examples
+devenv shell -- build-host
+devenv shell -- build-sdk
+devenv shell -- build-demo
+devenv shell -- build
+devenv shell -- check
 ```
 
-`task test:examples` runs the guest demo through `host-wasmtime` against an in memory SurrealDB engine and fails if query, subscribe, or cancel calls are not observed.
+`test-examples` runs the guest demo through `host-wasmtime` against an in memory SurrealDB engine and fails if query, subscribe, or cancel calls are not observed.
 
 Manual equivalent:
 
@@ -92,11 +92,11 @@ The automation is defined in `.github/workflows/release-components.yml`.
 
 You can also run that workflow manually and select one component to force a release check without relying on a new push event.
 
-WIT package release tasks in `Taskfile.yml` are still available for manual execution.
+WIT package release scripts are still available for manual execution.
 
 ```bash
-task release:dry-run TAG=0.1.0
-task release:publish VERSION=0.1.0
+devenv shell -- release-dry-run 0.1.0
+devenv shell -- release-publish 0.1.0
 ```
 
 Manual fallback workflow is available in `.github/workflows/release.yml` via `workflow_dispatch`.

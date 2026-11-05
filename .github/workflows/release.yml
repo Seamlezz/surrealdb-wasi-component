@@ -29,13 +29,9 @@ jobs:
     if: inputs.publish_wit || inputs.publish_sdk || inputs.publish_host_adapter
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-wasip2
-      - name: Install task
-        uses: arduino/setup-task@v2
+      - uses: ./.github/actions/devenv
       - name: Run example tests
-        run: task test:examples
+        run: devenv shell -- test-examples
 
   publish-wit:
     runs-on: ubuntu-latest
@@ -43,10 +39,7 @@ jobs:
     if: inputs.publish_wit
     steps:
       - uses: actions/checkout@v6
-      - name: Install task
-        uses: arduino/setup-task@v2
-      - name: Install wkg
-        run: cargo install wkg --locked
+      - uses: ./.github/actions/devenv
       - name: Validate version
         shell: bash
         run: |
@@ -58,11 +51,11 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Authenticate to GHCR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: devenv shell -- ghcr-login
       - name: Publish package
-        run: task release:publish VERSION=$VERSION
+        run: devenv shell -- release-publish "$VERSION"
 
   publish-crates:
     runs-on: ubuntu-latest
@@ -76,7 +69,7 @@ jobs:
       (needs.publish-wit.result == 'success' || needs.publish-wit.result == 'skipped')
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/devenv
       - name: Validate crates publish token
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -87,17 +80,17 @@ jobs:
           fi
       - name: Dry run publish surrealdb-component-sdk
         if: inputs.publish_sdk
-        run: cargo publish --dry-run -p surrealdb-component-sdk
+        run: devenv shell -- cargo publish --dry-run -p surrealdb-component-sdk
       - name: Dry run publish surrealdb-host-adapter
         if: inputs.publish_host_adapter
-        run: cargo publish --dry-run -p surrealdb-host-adapter
+        run: devenv shell -- cargo publish --dry-run -p surrealdb-host-adapter
       - name: Publish surrealdb-component-sdk
         if: inputs.publish_sdk
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish -p surrealdb-component-sdk
+        run: devenv shell -- cargo publish -p surrealdb-component-sdk
       - name: Publish surrealdb-host-adapter
         if: inputs.publish_host_adapter
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish -p surrealdb-host-adapter
+        run: devenv shell -- cargo publish -p surrealdb-host-adapter

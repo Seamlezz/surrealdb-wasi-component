@@ -1,0 +1,7 @@
+# Where wkg finds WIT packages. wit/world.wit uses wasmcloud:observability, which this
+# organization publishes at ghcr.io/seamlezz/wasmcloud/observability. devenv points
+# WKG_CONFIG_FILE here, so no machine or CI runner needs its own wkg configuration.
+[namespace_registries]
+wasi = "wasi.dev"
+seamlezz = { registry = "seamlezz", metadata = { preferredProtocol = "oci", oci = { registry = "ghcr.io" } } }
+wasmcloud = { registry = "seamlezz", metadata = { preferredProtocol = "oci", oci = { registry = "ghcr.io", namespacePrefix = "seamlezz/" } } }

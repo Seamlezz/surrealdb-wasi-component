@@ -10,4 +10,4 @@ The package exposes one async interface, `call`, with three functions:
 
 Parameters and live event payloads are CBOR encoded.
 
-Publish with Taskfile targets from repository root.
+Publish with the `release-publish` devenv script from repository root.
