@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: read # wit-fetch reads a private package
 
 jobs:
   checks:
@@ -15,4 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/devenv
+      - run: devenv shell -- ghcr-login
+        env:
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: devenv shell -- check
