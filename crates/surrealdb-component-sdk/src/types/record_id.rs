@@ -753,7 +753,7 @@ mod tests {
     fn record_id_value_from_impls() {
         assert_eq!(RecordIdValue::from(true), RecordIdValue::Bool(true));
         assert_eq!(RecordIdValue::from(42_i64), RecordIdValue::Number(42));
-        assert_eq!(RecordIdValue::from(3.14_f64), RecordIdValue::Float(3.14));
+        assert_eq!(RecordIdValue::from(1.5_f64), RecordIdValue::Float(1.5));
         assert_eq!(
             RecordIdValue::from("hello"),
             RecordIdValue::String("hello".to_string())
