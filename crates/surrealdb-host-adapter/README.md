@@ -9,16 +9,33 @@ pub async fn query(
     db: &Surreal<Any>,
     query: String,
     params: Vec<(String, Vec<u8>)>,
-) -> Result<Vec<Result<Vec<u8>, String>>, QueryError>
+) -> Result<Vec<Result<Vec<u8>, StatementError>>, QueryError>
 ```
 
-`query` decodes guest CBOR parameters, executes the SurrealDB statement set, and encodes each statement result back to normalized CBOR.
+`query` decodes guest CBOR parameters, executes the SurrealDB statement set, and encodes each statement result back to normalized CBOR. `subscribe` opens a live query the same way and returns its notification stream.
+
+## Tokio runtime
+
+The host must run the adapter inside a multi threaded tokio runtime whose worker threads have the 10 MiB stack SurrealDB asks an embedding runtime for:
+
+```rust
+tokio::runtime::Builder::new_multi_thread()
+    .enable_all()
+    .thread_stack_size(10 * 1024 * 1024)
+    .build()?
+    .block_on(run())
+```
+
+`query` and `subscribe` run their database work on a tokio task of their own. Wasmtime polls a host import on the calling guest's fiber, and the SurrealDB 4 embedded engine executes a query inside the future that awaits it, so without that task a query would run on the fiber's small stack. The guest fibers keep Wasmtime's default stack size.
+
+The task carries the caller's `tracing` span and OpenTelemetry context, so database spans stay children of the guest call. Dropping the returned future aborts the task.
 
 ## QueryError behavior
 
 1. `QueryError::ParamDecode { key, source }` is returned when one bound parameter cannot be decoded from CBOR.
 2. `QueryError::QueryExecution(source)` is returned when SurrealDB fails to execute the statement set.
-3. Statement extraction and serialization issues remain per statement `Err(String)` entries in the returned vector.
+3. `QueryError::TaskFailed(message)` is returned when the database task panics or its runtime shuts down; the message carries the panic text. `SubscribeError::TaskFailed` is the same for `subscribe`.
+4. Statement extraction and serialization issues remain per statement `Err(StatementError)` entries in the returned vector.
 
 ## Value transport
 
@@ -48,7 +65,7 @@ See `examples/host-wasmtime/src/main.rs` for the complete wiring, including:
 
 ## Runtime sequence
 
-1. Create and connect a `Surreal<Any>` client.
+1. Start a tokio runtime as described in [Tokio runtime](#tokio-runtime), then create and connect a `Surreal<Any>` client inside it.
 2. Create host state that stores the client.
 3. Generate and register bindings with `bindings::Adapter::add_to_linker`.
 4. Create `Store` with host state.

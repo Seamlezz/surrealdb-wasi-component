@@ -425,8 +425,19 @@ impl<T: Send> bindings::seamlezz::surrealdb::call::HostWithStore<T>
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+/// SurrealDB asks an embedding runtime for 10 MiB worker stacks. The host adapter runs every
+/// query on such a worker, so guest fibers keep Wasmtime's default stack.
+const SURREALDB_THREAD_STACK: usize = 10 * 1024 * 1024;
+
+fn main() -> Result<()> {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(SURREALDB_THREAD_STACK)
+        .build()?
+        .block_on(run())
+}
+
+async fn run() -> Result<()> {
     let component_path = env::args()
         .nth(1)
         .context("Usage: host-wasmtime <path-to-component.wasm>")?;

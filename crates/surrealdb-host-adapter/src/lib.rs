@@ -1,10 +1,15 @@
 mod convert;
 mod manager;
 
+use std::any::Any as Payload;
+
 use convert::{cbor_slice_to_surreal, ordered_params, surreal_to_cbor_bytes};
+use opentelemetry::context::FutureExt as _;
 use surrealdb::{Notification, Surreal, engine::any::Any, method::QueryStream};
 use surrealdb_types::{Action, ErrorDetails, QueryError as SurrealQueryError, Value};
 use thiserror::Error;
+use tokio::task::{JoinError, JoinHandle};
+use tracing::Instrument as _;
 
 pub use manager::{SubscriptionManager, SubscriptionTask};
 
@@ -18,6 +23,8 @@ pub enum QueryError {
     },
     #[error("surreal query failed")]
     QueryExecution(#[source] surrealdb::Error),
+    #[error("database task failed: {0}")]
+    TaskFailed(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,6 +65,50 @@ pub enum SubscribeError {
     StreamOpen(#[source] surrealdb::Error),
     #[error("failed to serialize live notification")]
     Serialize(#[source] anyhow::Error),
+    #[error("database task failed: {0}")]
+    TaskFailed(String),
+}
+
+/// Runs database work on a tokio task of its own and waits for it.
+///
+/// Wasmtime polls a host import on the calling guest's fiber, whose stack is small, and the
+/// SurrealDB 4 embedded engine executes a query inside the future that awaits it. A task of its
+/// own gives that work a runtime thread's stack. The task carries the caller's tracing span and
+/// OpenTelemetry context, so database spans stay children of the guest call; it is aborted when
+/// the caller drops the returned future, and a panic in it becomes an error.
+async fn run_on_own_task<T: Send + 'static>(
+    work: impl Future<Output = T> + Send + 'static,
+) -> Result<T, String> {
+    let work = work
+        .instrument(tracing::Span::current())
+        .with_current_context();
+    let mut task = AbortOnDrop(tokio::spawn(work));
+    (&mut task.0).await.map_err(task_failure)
+}
+
+struct AbortOnDrop<T>(JoinHandle<T>);
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+fn task_failure(error: JoinError) -> String {
+    match error.try_into_panic() {
+        Ok(payload) => panic_message(payload),
+        Err(error) => error.to_string(),
+    }
+}
+
+fn panic_message(payload: Box<dyn Payload + Send>) -> String {
+    match payload.downcast::<String>() {
+        Ok(message) => *message,
+        Err(payload) => payload.downcast_ref::<&str>().map_or_else(
+            || "database task panicked".to_string(),
+            |message| message.to_string(),
+        ),
+    }
 }
 
 fn decode_params<E>(
@@ -74,7 +125,19 @@ fn decode_params<E>(
     Ok(decoded)
 }
 
+/// Executes a guest statement set on its own tokio task; see [`run_on_own_task`].
 pub async fn query(
+    db: &Surreal<Any>,
+    query: String,
+    params: Vec<(String, Vec<u8>)>,
+) -> Result<Vec<Result<Vec<u8>, StatementError>>, QueryError> {
+    let db = db.clone();
+    run_on_own_task(async move { execute_query(&db, query, params).await })
+        .await
+        .map_err(QueryError::TaskFailed)?
+}
+
+async fn execute_query(
     db: &Surreal<Any>,
     query: String,
     params: Vec<(String, Vec<u8>)>,
@@ -123,7 +186,19 @@ fn statement_error(error: surrealdb::Error) -> StatementError {
     }
 }
 
+/// Opens a live query on its own tokio task; see [`run_on_own_task`].
 pub async fn subscribe(
+    db: &Surreal<Any>,
+    query: String,
+    params: Vec<(String, Vec<u8>)>,
+) -> Result<QueryStream<Notification<Value>>, SubscribeError> {
+    let db = db.clone();
+    run_on_own_task(async move { open_live_query(&db, query, params).await })
+        .await
+        .map_err(SubscribeError::TaskFailed)?
+}
+
+async fn open_live_query(
     db: &Surreal<Any>,
     query: String,
     params: Vec<(String, Vec<u8>)>,
@@ -174,7 +249,148 @@ mod tests {
     use surrealdb::{Surreal, engine::any::Any};
     use surrealdb_types::{Error, QueryError as SurrealQueryError};
 
-    use super::{StatementError, query, statement_error};
+    use super::{StatementError, query, run_on_own_task, statement_error, subscribe};
+
+    /// Wasmtime polls a host import on the calling guest's fiber, whose stack defaults to 2 MiB.
+    /// A quarter of that leaves no room for SurrealDB to execute on the caller's stack.
+    const GUEST_FIBER_STACK: usize = 512 * 1024;
+
+    /// The worker stack SurrealDB asks an embedding runtime for.
+    const SURREALDB_THREAD_STACK: usize = 10 * 1024 * 1024;
+
+    /// Polls `call` on a thread with a guest fiber sized stack while `runtime` keeps its own
+    /// worker threads, the way a host import is polled inside a running host.
+    fn poll_on_guest_stack<T: Send + 'static>(
+        runtime: &tokio::runtime::Runtime,
+        call: impl Future<Output = T> + Send + 'static,
+    ) -> T {
+        let handle = runtime.handle().clone();
+        std::thread::Builder::new()
+            .stack_size(GUEST_FIBER_STACK)
+            .spawn(move || handle.block_on(call))
+            .unwrap()
+            .join()
+            .unwrap()
+    }
+
+    fn host_runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_stack_size(SURREALDB_THREAD_STACK)
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn a_panic_in_database_work_becomes_an_error() {
+        let runtime = host_runtime();
+
+        let outcome = runtime.block_on(run_on_own_task(async { panic!("engine exploded") }));
+
+        assert_eq!(outcome, Err::<(), _>("engine exploded".to_string()));
+    }
+
+    #[test]
+    fn dropping_the_call_aborts_its_database_work() {
+        let runtime = host_runtime();
+        let (work_dropped_tx, work_dropped_rx) = tokio::sync::oneshot::channel::<()>();
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+
+        runtime.block_on(async move {
+            let call = run_on_own_task(async move {
+                let _drop_signal = work_dropped_tx;
+                started_tx.send(()).unwrap();
+                std::future::pending::<()>().await;
+            });
+            tokio::select! {
+                _ = call => unreachable!("pending work never completes"),
+                _ = started_rx => {}
+            }
+        });
+
+        let aborted = runtime.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(5), work_dropped_rx).await
+        });
+        assert!(
+            matches!(aborted, Ok(Err(_))),
+            "the abandoned work kept running"
+        );
+    }
+
+    #[test]
+    fn database_work_runs_in_the_callers_span_and_trace_context() {
+        use opentelemetry::{Context, context::FutureExt as _};
+        use tracing::Instrument as _;
+
+        #[derive(Debug, PartialEq)]
+        struct GuestCall(u32);
+
+        let subscriber = tracing_subscriber::registry();
+        tracing::subscriber::with_default(subscriber, || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap();
+            let guest_span = tracing::info_span!("guest call");
+            let guest_context = Context::new().with_value(GuestCall(7));
+
+            let (span, call) = runtime
+                .block_on(
+                    run_on_own_task(async {
+                        (
+                            tracing::Span::current().id(),
+                            Context::current().get::<GuestCall>().map(|call| call.0),
+                        )
+                    })
+                    .instrument(guest_span.clone())
+                    .with_context(guest_context),
+                )
+                .unwrap();
+
+            assert_eq!(span, guest_span.id());
+            assert_eq!(call, Some(7));
+        });
+    }
+
+    #[test]
+    fn query_runs_when_polled_on_a_guest_fiber_stack() {
+        let runtime = host_runtime();
+        let db = runtime.block_on(test_db());
+
+        let results = poll_on_guest_stack(&runtime, async move {
+            query(
+                &db,
+                "DEFINE TABLE person SCHEMALESS; CREATE person:one SET name = 'one'; SELECT VALUE name FROM person;"
+                    .to_string(),
+                Vec::new(),
+            )
+            .await
+            .unwrap()
+        });
+
+        let names =
+            serde_cbor::from_slice::<serde_json::Value>(results[2].as_ref().unwrap()).unwrap();
+        assert_eq!(names, json!(["one"]));
+    }
+
+    #[test]
+    fn subscribe_runs_when_polled_on_a_guest_fiber_stack() {
+        let runtime = host_runtime();
+        let db = runtime.block_on(async {
+            let db = test_db().await;
+            query(&db, "DEFINE TABLE person SCHEMALESS".into(), Vec::new())
+                .await
+                .unwrap();
+            db
+        });
+
+        let opened = poll_on_guest_stack(&runtime, async move {
+            subscribe(&db, "LIVE SELECT * FROM person".to_string(), Vec::new())
+                .await
+                .is_ok()
+        });
+
+        assert!(opened);
+    }
 
     async fn test_db() -> Surreal<Any> {
         let db: Surreal<Any> = Surreal::init();
