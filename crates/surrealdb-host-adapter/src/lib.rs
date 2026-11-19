@@ -312,6 +312,64 @@ mod tests {
         assert_eq!(is_record, json!(true));
     }
 
+    async fn single_results(db: &Surreal<Any>, query_text: &str) -> Vec<serde_json::Value> {
+        query(db, query_text.to_string(), Vec::new())
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|result| serde_cbor::from_slice(&result.unwrap()).unwrap())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn returns_sized_numbers_as_plain_numbers() {
+        let db = test_db().await;
+
+        let results = single_results(&db, "RETURN 255u8; RETURN -3i16; RETURN 1.5f32;").await;
+
+        assert_eq!(results, vec![json!(255), json!(-3), json!(1.5)]);
+    }
+
+    #[tokio::test]
+    async fn returns_calendar_values_as_text() {
+        let db = test_db().await;
+
+        let results = single_results(
+            &db,
+            "RETURN pd'2026-11-19'; RETURN pt'13:45:00'; RETURN ts'2026-11-19T13:45:00'; RETURN ivl'P1M2D';",
+        )
+        .await;
+
+        assert_eq!(
+            results,
+            vec![
+                json!("2026-11-19"),
+                json!("13:45:00"),
+                json!("2026-11-19T13:45:00"),
+                json!("P1M2D"),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn round_trips_decimals_beyond_28_places() {
+        let db = test_db().await;
+        let digits = "0.123456789012345678901234567890123";
+        let param = serde_cbor::to_vec(&json!({"$surrealdb::decimal": digits})).unwrap();
+
+        let results = query(
+            &db,
+            "RETURN $amount;".to_string(),
+            vec![("amount".to_string(), param)],
+        )
+        .await
+        .unwrap();
+
+        let value =
+            serde_cbor::from_slice::<serde_json::Value>(results[0].as_ref().unwrap()).unwrap();
+        assert_eq!(value, json!({"$surrealdb::decimal": digits}));
+    }
+
     #[test]
     fn preserves_structured_transaction_conflicts() {
         let error = Error::query(

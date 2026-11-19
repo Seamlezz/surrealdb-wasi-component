@@ -20,6 +20,21 @@ pub async fn query(
 2. `QueryError::QueryExecution(source)` is returned when SurrealDB fails to execute the statement set.
 3. Statement extraction and serialization issues remain per statement `Err(String)` entries in the returned vector.
 
+## Value transport
+
+The adapter targets SurrealDB 4. Guest parameters and statement results travel as plain CBOR, so a guest can read them into `serde_json::Value` or its own serde types.
+
+| SurrealDB value | CBOR sent to the guest |
+| --- | --- |
+| `int`, `i8` to `u64` | integer |
+| `float`, `f16`, `f32` | float |
+| `decimal`, `bigdecimal` | `{"$surrealdb::decimal": "<digits>"}` |
+| `datetime`, `date`, `time`, `timestamp`, `interval` | text |
+| `uuid`, `duration`, `regex` | `{"$surrealdb::<kind>": "<text>"}` |
+| record id | `{"table": ..., "key": ...}` |
+
+A `$surrealdb::decimal` parameter binds as a `decimal` when it fits 28 places and as a `bigdecimal` otherwise, so no digits are rounded away.
+
 ## Wasmtime wiring pattern
 
 The host application owns the adapter type and WIT bindings. The adapter `query` and live query helpers are called from generated host trait implementations.
