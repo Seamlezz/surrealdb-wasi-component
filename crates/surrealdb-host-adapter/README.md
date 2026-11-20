@@ -5,18 +5,22 @@ Rust host helper for the `seamlezz:surrealdb` WIT contract. This crate exposes q
 ## Core API
 
 ```rust
-pub async fn query(
-    db: &Surreal<Any>,
+pub async fn query<D>(
+    db: D,
     query: String,
     params: Vec<(String, Vec<u8>)>,
 ) -> Result<Vec<Result<Vec<u8>, StatementError>>, QueryError>
+where
+    D: Deref<Target = Surreal<Any>> + Send + Sync + 'static
 ```
+
+`db` is an owned handle on the host's client, such as an `Arc<Surreal<Any>>` or a tokio `OwnedRwLockReadGuard<Surreal<Any>>`. The statements run in that client's session; cloning the `Surreal<Any>` instead would open a new session for every call.
 
 `query` decodes guest CBOR parameters, executes the SurrealDB statement set, and encodes each statement result back to normalized CBOR. `subscribe` opens a live query the same way and returns its notification stream.
 
 ## Tokio runtime
 
-The host must run the adapter inside a multi threaded tokio runtime whose worker threads have the 10 MiB stack SurrealDB asks an embedding runtime for:
+The host must call the adapter inside a tokio runtime whose threads have the 10 MiB stack SurrealDB asks an embedding runtime for:
 
 ```rust
 tokio::runtime::Builder::new_multi_thread()
@@ -50,7 +54,7 @@ The adapter targets SurrealDB 4. Guest parameters and statement results travel a
 | `uuid`, `duration`, `regex` | `{"$surrealdb::<kind>": "<text>"}` |
 | record id | `{"table": ..., "key": ...}` |
 
-A `$surrealdb::decimal` parameter binds as a `decimal` when it fits 28 places and as a `bigdecimal` otherwise, so no digits are rounded away.
+An integer parameter above the `int` range binds as a `u64`, and a `$surrealdb::decimal` parameter binds as a `decimal`, rounded to 28 places.
 
 ## Wasmtime wiring pattern
 

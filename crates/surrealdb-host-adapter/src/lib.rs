@@ -2,6 +2,7 @@ mod convert;
 mod manager;
 
 use std::any::Any as Payload;
+use std::ops::Deref;
 
 use convert::{cbor_slice_to_surreal, ordered_params, surreal_to_cbor_bytes};
 use opentelemetry::context::FutureExt as _;
@@ -125,13 +126,28 @@ fn decode_params<E>(
     Ok(decoded)
 }
 
-/// Executes a guest statement set on its own tokio task; see [`run_on_own_task`].
-pub async fn query(
-    db: &Surreal<Any>,
+/// Executes a guest statement set and encodes each statement result as normalized CBOR.
+///
+/// `db` is an owned handle on the host's client, such as an `Arc<Surreal<Any>>` or a tokio
+/// `OwnedRwLockReadGuard<Surreal<Any>>`, and the statements run in that client's session.
+/// `Surreal::clone` would instead open a new session for every call.
+///
+/// The work runs on a tokio task of its own, so a host import polled on a guest's small fiber
+/// stack never executes SurrealDB itself. The threads of the tokio runtime need the 10 MiB stack
+/// SurrealDB asks an embedding runtime for. Dropping the returned future aborts the work, and a
+/// panic in it returns [`QueryError::TaskFailed`].
+///
+/// # Panics
+///
+/// Panics when called outside a tokio runtime.
+pub async fn query<D>(
+    db: D,
     query: String,
     params: Vec<(String, Vec<u8>)>,
-) -> Result<Vec<Result<Vec<u8>, StatementError>>, QueryError> {
-    let db = db.clone();
+) -> Result<Vec<Result<Vec<u8>, StatementError>>, QueryError>
+where
+    D: Deref<Target = Surreal<Any>> + Send + Sync + 'static,
+{
     run_on_own_task(async move { execute_query(&db, query, params).await })
         .await
         .map_err(QueryError::TaskFailed)?
@@ -186,13 +202,22 @@ fn statement_error(error: surrealdb::Error) -> StatementError {
     }
 }
 
-/// Opens a live query on its own tokio task; see [`run_on_own_task`].
-pub async fn subscribe(
-    db: &Surreal<Any>,
+/// Opens a live query and returns its notification stream.
+///
+/// Takes `db` and runs on a task of its own exactly as [`query`] does; a panic in the work returns
+/// [`SubscribeError::TaskFailed`].
+///
+/// # Panics
+///
+/// Panics when called outside a tokio runtime.
+pub async fn subscribe<D>(
+    db: D,
     query: String,
     params: Vec<(String, Vec<u8>)>,
-) -> Result<QueryStream<Notification<Value>>, SubscribeError> {
-    let db = db.clone();
+) -> Result<QueryStream<Notification<Value>>, SubscribeError>
+where
+    D: Deref<Target = Surreal<Any>> + Send + Sync + 'static,
+{
     run_on_own_task(async move { open_live_query(&db, query, params).await })
         .await
         .map_err(SubscribeError::TaskFailed)?
@@ -248,6 +273,8 @@ mod tests {
     use serde_json::json;
     use surrealdb::{Surreal, engine::any::Any};
     use surrealdb_types::{Error, QueryError as SurrealQueryError};
+
+    use std::sync::Arc;
 
     use super::{StatementError, query, run_on_own_task, statement_error, subscribe};
 
@@ -358,7 +385,7 @@ mod tests {
 
         let results = poll_on_guest_stack(&runtime, async move {
             query(
-                &db,
+                Arc::clone(&db),
                 "DEFINE TABLE person SCHEMALESS; CREATE person:one SET name = 'one'; SELECT VALUE name FROM person;"
                     .to_string(),
                 Vec::new(),
@@ -377,29 +404,37 @@ mod tests {
         let runtime = host_runtime();
         let db = runtime.block_on(async {
             let db = test_db().await;
-            query(&db, "DEFINE TABLE person SCHEMALESS".into(), Vec::new())
-                .await
-                .unwrap();
+            query(
+                Arc::clone(&db),
+                "DEFINE TABLE person SCHEMALESS".into(),
+                Vec::new(),
+            )
+            .await
+            .unwrap();
             db
         });
 
         let opened = poll_on_guest_stack(&runtime, async move {
-            subscribe(&db, "LIVE SELECT * FROM person".to_string(), Vec::new())
-                .await
-                .is_ok()
+            subscribe(
+                Arc::clone(&db),
+                "LIVE SELECT * FROM person".to_string(),
+                Vec::new(),
+            )
+            .await
+            .is_ok()
         });
 
         assert!(opened);
     }
 
-    async fn test_db() -> Surreal<Any> {
+    async fn test_db() -> Arc<Surreal<Any>> {
         let db: Surreal<Any> = Surreal::init();
         db.connect("memory").await.unwrap();
         db.use_ns("host_adapter_tests")
             .use_db("typed_transport")
             .await
             .unwrap();
-        db
+        Arc::new(db)
     }
 
     #[tokio::test]
@@ -411,7 +446,7 @@ mod tests {
         .unwrap();
 
         let results = query(
-            &db,
+            Arc::clone(&db),
             "RETURN type::is_uuid($id); RETURN $id;".to_string(),
             vec![("id".to_string(), param)],
         )
@@ -438,7 +473,7 @@ mod tests {
         let param = serde_cbor::to_vec(&json!({"table": "person", "key": "demo"})).unwrap();
 
         let results = query(
-            &db,
+            Arc::clone(&db),
             "RETURN $id = person:demo; RETURN type::is_record($id);".to_string(),
             vec![("id".to_string(), param)],
         )
@@ -462,7 +497,7 @@ mod tests {
         let param = serde_cbor::to_vec(&json!({"table": "person", "key": 42})).unwrap();
 
         let results = query(
-            &db,
+            Arc::clone(&db),
             "RETURN $id = person:42; RETURN type::is_record($id);".to_string(),
             vec![("id".to_string(), param)],
         )
@@ -490,7 +525,7 @@ mod tests {
         .unwrap();
 
         let results = query(
-            &db,
+            Arc::clone(&db),
             "RETURN type::is_record($id);".to_string(),
             vec![("id".to_string(), param)],
         )
@@ -514,7 +549,7 @@ mod tests {
         .unwrap();
 
         let results = query(
-            &db,
+            Arc::clone(&db),
             "RETURN type::is_record($id);".to_string(),
             vec![("id".to_string(), param)],
         )
@@ -528,8 +563,8 @@ mod tests {
         assert_eq!(is_record, json!(true));
     }
 
-    async fn single_results(db: &Surreal<Any>, query_text: &str) -> Vec<serde_json::Value> {
-        query(db, query_text.to_string(), Vec::new())
+    async fn single_results(db: &Arc<Surreal<Any>>, query_text: &str) -> Vec<serde_json::Value> {
+        query(Arc::clone(db), query_text.to_string(), Vec::new())
             .await
             .unwrap()
             .into_iter()
@@ -568,22 +603,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn round_trips_decimals_beyond_28_places() {
+    async fn guest_queries_run_in_the_hosts_session() {
         let db = test_db().await;
-        let digits = "0.123456789012345678901234567890123";
-        let param = serde_cbor::to_vec(&json!({"$surrealdb::decimal": digits})).unwrap();
+        let host_session: Option<String> = db
+            .query("RETURN <string> session::id()")
+            .await
+            .unwrap()
+            .take(0)
+            .unwrap();
+
+        let guest_session = single_results(&db, "RETURN <string> session::id();").await;
+
+        assert_eq!(guest_session, vec![json!(host_session.unwrap())]);
+    }
+
+    #[tokio::test]
+    async fn round_trips_unsigned_integers_beyond_i64() {
+        let db = test_db().await;
+        let large = u64::MAX - 5;
+        let param = serde_cbor::to_vec(&large).unwrap();
 
         let results = query(
-            &db,
-            "RETURN $amount;".to_string(),
-            vec![("amount".to_string(), param)],
+            Arc::clone(&db),
+            "RETURN $count;".to_string(),
+            vec![("count".to_string(), param)],
         )
         .await
         .unwrap();
 
-        let value =
-            serde_cbor::from_slice::<serde_json::Value>(results[0].as_ref().unwrap()).unwrap();
-        assert_eq!(value, json!({"$surrealdb::decimal": digits}));
+        let value = serde_cbor::from_slice::<u64>(results[0].as_ref().unwrap()).unwrap();
+        assert_eq!(value, large);
     }
 
     #[test]
@@ -602,7 +651,7 @@ mod tests {
     #[tokio::test]
     async fn preserves_thrown_domain_errors() {
         let db = test_db().await;
-        let results = query(&db, "THROW 'invalid-token'".into(), Vec::new())
+        let results = query(Arc::clone(&db), "THROW 'invalid-token'".into(), Vec::new())
             .await
             .unwrap();
 

@@ -4,10 +4,10 @@ use std::str::FromStr;
 use anyhow::{Result, bail};
 use serde_cbor::Value as CborValue;
 use surrealdb_types::{
-    Array as SurrealArray, BigDecimal as SurrealBigDecimal, Bytes as SurrealBytes,
-    Decimal as SurrealDecimal, Duration as SurrealDuration, Number as SurrealNumber,
-    Object as SurrealObject, RecordId as SurrealRecordId, RecordIdKey as SurrealRecordIdKey,
-    Regex as SurrealRegex, SurrealValue as _, Uuid as SurrealUuid, Value as SurrealValue,
+    Array as SurrealArray, Bytes as SurrealBytes, Decimal as SurrealDecimal,
+    Duration as SurrealDuration, Number as SurrealNumber, Object as SurrealObject,
+    RecordId as SurrealRecordId, RecordIdKey as SurrealRecordIdKey, Regex as SurrealRegex,
+    SurrealValue as _, Uuid as SurrealUuid, Value as SurrealValue,
 };
 
 const UUID_TAG: &str = "$surrealdb::uuid";
@@ -85,12 +85,7 @@ fn cbor_to_surreal(value: CborValue) -> Result<SurrealValue> {
     Ok(match value {
         CborValue::Null => SurrealValue::Null,
         CborValue::Bool(value) => SurrealValue::Bool(value),
-        CborValue::Integer(value) => {
-            if value < i64::MIN as i128 || value > i64::MAX as i128 {
-                bail!("unsupported integer representation")
-            }
-            SurrealValue::Number(SurrealNumber::Int(value as i64))
-        }
+        CborValue::Integer(value) => SurrealValue::Number(integer_to_surreal(value)?),
         CborValue::Float(value) => SurrealValue::Number(SurrealNumber::Float(value)),
         CborValue::Bytes(value) => SurrealValue::Bytes(SurrealBytes::from(value)),
         CborValue::Text(value) => SurrealValue::String(value),
@@ -155,7 +150,9 @@ fn tagged_scalar_to_surreal(tag: String, value: CborValue) -> Result<SurrealValu
     Ok(match tag.as_str() {
         UUID_TAG => SurrealValue::Uuid(SurrealUuid::try_from(value)?),
         DURATION_TAG => SurrealValue::Duration(SurrealDuration::from_str(&value)?),
-        DECIMAL_TAG => SurrealValue::Number(decimal_from_str(&value)?),
+        DECIMAL_TAG => {
+            SurrealValue::Number(SurrealNumber::Decimal(SurrealDecimal::from_str(&value)?))
+        }
         REGEX_TAG => SurrealValue::Regex(SurrealRegex::from_str(&value)?),
         _ => {
             let mut object = SurrealObject::new();
@@ -173,15 +170,15 @@ fn map_key_to_string(key: CborValue) -> Result<String> {
     }
 }
 
-/// A decimal that fits 28 places stays a `decimal`; a longer one becomes a `bigdecimal`, which
-/// SurrealDB 4 compares and stores without rounding.
-fn decimal_from_str(value: &str) -> Result<SurrealNumber> {
-    if let Ok(decimal) = SurrealDecimal::from_str_exact(value) {
-        return Ok(SurrealNumber::Decimal(decimal));
+/// An `int` when the value fits, and a `u64` above that, the kind such a value arrived as.
+fn integer_to_surreal(value: i128) -> Result<SurrealNumber> {
+    if let Ok(value) = i64::try_from(value) {
+        return Ok(SurrealNumber::Int(value));
     }
-    Ok(SurrealNumber::BigDecimal(Box::new(
-        SurrealBigDecimal::from_str(value)?,
-    )))
+    match u64::try_from(value) {
+        Ok(value) => Ok(SurrealNumber::U64(value)),
+        Err(_) => bail!("unsupported integer representation"),
+    }
 }
 
 fn number_to_cbor(value: SurrealNumber) -> CborValue {
