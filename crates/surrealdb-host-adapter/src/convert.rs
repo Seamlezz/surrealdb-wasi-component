@@ -2,13 +2,12 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use anyhow::{Result, bail};
-use rust_decimal::Decimal as RustDecimal;
 use serde_cbor::Value as CborValue;
 use surrealdb_types::{
-    Array as SurrealArray, Bytes as SurrealBytes, Duration as SurrealDuration,
-    Number as SurrealNumber, Object as SurrealObject, RecordId as SurrealRecordId,
-    RecordIdKey as SurrealRecordIdKey, Regex as SurrealRegex, SurrealValue as _,
-    Uuid as SurrealUuid, Value as SurrealValue,
+    Array as SurrealArray, Bytes as SurrealBytes, Decimal as SurrealDecimal,
+    Duration as SurrealDuration, Number as SurrealNumber, Object as SurrealObject,
+    RecordId as SurrealRecordId, RecordIdKey as SurrealRecordIdKey, Regex as SurrealRegex,
+    SurrealValue as _, Uuid as SurrealUuid, Value as SurrealValue,
 };
 
 const UUID_TAG: &str = "$surrealdb::uuid";
@@ -75,6 +74,10 @@ fn surreal_to_cbor(value: SurrealValue) -> Result<CborValue> {
                 .map(surreal_to_cbor)
                 .collect::<Result<Vec<_>>>()?,
         ),
+        SurrealValue::Date(v) => CborValue::Text(v.to_string()),
+        SurrealValue::Time(v) => CborValue::Text(v.to_string()),
+        SurrealValue::Timestamp(v) => CborValue::Text(v.to_string()),
+        SurrealValue::Interval(v) => CborValue::Text(v.to_string()),
     })
 }
 
@@ -82,12 +85,7 @@ fn cbor_to_surreal(value: CborValue) -> Result<SurrealValue> {
     Ok(match value {
         CborValue::Null => SurrealValue::Null,
         CborValue::Bool(value) => SurrealValue::Bool(value),
-        CborValue::Integer(value) => {
-            if value < i64::MIN as i128 || value > i64::MAX as i128 {
-                bail!("unsupported integer representation")
-            }
-            SurrealValue::Number(SurrealNumber::Int(value as i64))
-        }
+        CborValue::Integer(value) => SurrealValue::Number(integer_to_surreal(value)?),
         CborValue::Float(value) => SurrealValue::Number(SurrealNumber::Float(value)),
         CborValue::Bytes(value) => SurrealValue::Bytes(SurrealBytes::from(value)),
         CborValue::Text(value) => SurrealValue::String(value),
@@ -152,7 +150,9 @@ fn tagged_scalar_to_surreal(tag: String, value: CborValue) -> Result<SurrealValu
     Ok(match tag.as_str() {
         UUID_TAG => SurrealValue::Uuid(SurrealUuid::try_from(value)?),
         DURATION_TAG => SurrealValue::Duration(SurrealDuration::from_str(&value)?),
-        DECIMAL_TAG => SurrealValue::Number(SurrealNumber::Decimal(RustDecimal::from_str(&value)?)),
+        DECIMAL_TAG => {
+            SurrealValue::Number(SurrealNumber::Decimal(SurrealDecimal::from_str(&value)?))
+        }
         REGEX_TAG => SurrealValue::Regex(SurrealRegex::from_str(&value)?),
         _ => {
             let mut object = SurrealObject::new();
@@ -170,11 +170,32 @@ fn map_key_to_string(key: CborValue) -> Result<String> {
     }
 }
 
+/// An `int` when the value fits, and a `u64` above that, the kind such a value arrived as.
+fn integer_to_surreal(value: i128) -> Result<SurrealNumber> {
+    if let Ok(value) = i64::try_from(value) {
+        return Ok(SurrealNumber::Int(value));
+    }
+    match u64::try_from(value) {
+        Ok(value) => Ok(SurrealNumber::U64(value)),
+        Err(_) => bail!("unsupported integer representation"),
+    }
+}
+
 fn number_to_cbor(value: SurrealNumber) -> CborValue {
     match value {
-        SurrealNumber::Int(v) => CborValue::Integer(v as i128),
+        SurrealNumber::Int(v) => CborValue::Integer(v.into()),
+        SurrealNumber::I8(v) => CborValue::Integer(v.into()),
+        SurrealNumber::U8(v) => CborValue::Integer(v.into()),
+        SurrealNumber::I16(v) => CborValue::Integer(v.into()),
+        SurrealNumber::U16(v) => CborValue::Integer(v.into()),
+        SurrealNumber::I32(v) => CborValue::Integer(v.into()),
+        SurrealNumber::U32(v) => CborValue::Integer(v.into()),
+        SurrealNumber::U64(v) => CborValue::Integer(v.into()),
         SurrealNumber::Float(v) => CborValue::Float(v),
+        SurrealNumber::F16(v) => CborValue::Float(v.into()),
+        SurrealNumber::F32(v) => CborValue::Float(v.into()),
         SurrealNumber::Decimal(v) => tagged_text(DECIMAL_TAG, v.to_string()),
+        SurrealNumber::BigDecimal(v) => tagged_text(DECIMAL_TAG, v.to_string()),
     }
 }
 

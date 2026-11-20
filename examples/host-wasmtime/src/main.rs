@@ -223,9 +223,9 @@ impl<T: Send> bindings::seamlezz::surrealdb::call::HostWithStore<T>
         call_stats.increment_query();
         println!("wasi host query stats incremented");
 
-        let db = db.read().await;
+        let db = db.read_owned().await;
         println!("wasi host query db lock acquired");
-        let result = surrealdb_host_adapter::query(&db, query, params)
+        let result = surrealdb_host_adapter::query(db, query, params)
             .await
             .map(|results| {
                 results
@@ -268,12 +268,12 @@ impl<T: Send> bindings::seamlezz::surrealdb::call::HostWithStore<T>
             subscription_id
         );
         let stream = {
-            let db = db.read().await;
+            let db = db.read_owned().await;
             println!(
                 "wasi host subscribe db lock acquired. subscription_id={}",
                 subscription_id
             );
-            surrealdb_host_adapter::subscribe(&db, query, params)
+            surrealdb_host_adapter::subscribe(db, query, params)
                 .await
                 .map_err(wasmtime::Error::new)?
         };
@@ -425,8 +425,19 @@ impl<T: Send> bindings::seamlezz::surrealdb::call::HostWithStore<T>
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+/// SurrealDB asks an embedding runtime for 10 MiB worker stacks. The host adapter runs every
+/// query on such a worker, so guest fibers keep Wasmtime's default stack.
+const SURREALDB_THREAD_STACK: usize = 10 * 1024 * 1024;
+
+fn main() -> Result<()> {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(SURREALDB_THREAD_STACK)
+        .build()?
+        .block_on(run())
+}
+
+async fn run() -> Result<()> {
     let component_path = env::args()
         .nth(1)
         .context("Usage: host-wasmtime <path-to-component.wasm>")?;
